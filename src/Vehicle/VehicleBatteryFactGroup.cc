@@ -101,6 +101,15 @@ void VehicleBatteryFactGroup::handleMessage(Vehicle* vehicle, mavlink_message_t&
         _handleBatteryStatus(vehicle, message);
         break;
     }
+
+    switch (message.msgid) {
+    case MAVLINK_MSG_ID_HIGH_LATENCY:
+    case MAVLINK_MSG_ID_HIGH_LATENCY2:
+    case MAVLINK_MSG_ID_BATTERY_STATUS:
+        _firstTelemetryUpdate = true;
+        _lastTelemetryUpdate.restart();
+        break;
+    }
 }
 
 void VehicleBatteryFactGroup::_handleHighLatency(Vehicle* vehicle, mavlink_message_t& message)

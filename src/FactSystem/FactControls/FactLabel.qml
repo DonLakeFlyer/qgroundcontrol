@@ -1,12 +1,37 @@
-import QtQuick 2.3
-import QtQuick.Controls 1.2
-import QtQuick.Controls.Styles 1.4
+/****************************************************************************
+ *
+ * (c) 2009-2020 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ *
+ * QGroundControl is licensed according to the terms in the file
+ * COPYING.md in the root of the source code directory.
+ *
+ ****************************************************************************/
 
-import QGroundControl.FactSystem 1.0
-import QGroundControl.Palette 1.0
-import QGroundControl.Controls 1.0
+import QGroundControl.Controls      1.0
+import QGroundControl.FactSystem    1.0
 
 QGCLabel {
-    property Fact fact: Fact { }
-    text: fact.valueString
+    property Fact fact
+    property bool showUnits:    true
+    property bool unitsSpacer:  true
+
+    font.strikeout: fact ? fact.telemetryLost : false
+    text:           valueText()
+
+    function valueText() {
+        if (fact) {
+            var str
+            if (fact.enumStringValue.length !== 0) {
+                str = fact.enumStringValue
+            } else {
+                str = fact.valueString
+            }
+            if (showUnits && fact.units.length !==0) {
+                str += (unitsSpacer ? " " : "") + fact.units
+            }
+            return str
+        } else {
+            return qsTr("--.--")
+        }
+    }
 }

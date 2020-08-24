@@ -187,9 +187,9 @@ private slots:
     void _writeBytesQueued(const QByteArray bytes);
 
 private slots:
-    void _run1HzTasks(void);
-    void _run10HzTasks(void);
-    void _run500HzTasks(void);
+    void _run2HzTasks   (void);
+    void _run10HzTasks  (void);
+    void _run500HzTasks (void);
 
 private:
     // From LinkInterface

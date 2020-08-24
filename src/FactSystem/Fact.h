@@ -77,6 +77,7 @@ public:
     Q_PROPERTY(bool         readOnly                READ readOnly                                           CONSTANT)
     Q_PROPERTY(bool         writeOnly               READ writeOnly                                          CONSTANT)
     Q_PROPERTY(bool         volatileValue           READ volatileValue                                      CONSTANT)
+    Q_PROPERTY(bool         telemetryLost           READ telemetryLost                                      NOTIFY telemetryLostChanged)
 
     /// @brief Convert and validate value
     /// @param cookedValue: Value to convert and validate
@@ -129,6 +130,7 @@ public:
     bool            readOnly                (void) const;
     bool            writeOnly               (void) const;
     bool            volatileValue           (void) const;
+    bool            telemetryLost           (void) const { return _telemetryLost; }
 
     // Internal hack to allow changes to fact which do not signal reboot. Currently used by font point size
     // code in ScreenTools.qml to set initial sizing at first boot.
@@ -143,6 +145,7 @@ public:
     void setCookedValue     (const QVariant& value);
     void setEnumIndex       (int index);
     void setEnumStringValue (const QString& value);
+    void setTelemetryLost   (bool telemtryLost);
     int  valueIndex         (const QString& value);
 
     // The following methods allow you to defer sending of the valueChanged signals in order to implement
@@ -176,10 +179,11 @@ public:
     void setEnumInfo(const QStringList& strings, const QVariantList& values);
 
 signals:
-    void bitmaskStringsChanged(void);
-    void bitmaskValuesChanged(void);
-    void enumsChanged(void);
-    void sendValueChangedSignalsChanged(bool sendValueChangedSignals);
+    void bitmaskStringsChanged          (void);
+    void bitmaskValuesChanged           (void);
+    void enumsChanged                   (void);
+    void sendValueChangedSignalsChanged (bool sendValueChangedSignals);
+    void telemetryLostChanged           (bool telemetryLost);
 
     /// QObject Property System signal for value property changes
     ///
@@ -206,14 +210,15 @@ protected:
     void _sendValueChangedSignal(QVariant value);
 
     QString                     _name;
-    int                         _componentId;
+    int                         _componentId                = -1;
     QVariant                    _rawValue;
-    FactMetaData::ValueType_t   _type;
-    FactMetaData*               _metaData;
-    bool                        _sendValueChangedSignals;
-    bool                        _deferredValueChangeSignal;
-    FactValueSliderListModel*   _valueSliderModel;
-    bool                        _ignoreQGCRebootRequired;
+    FactMetaData::ValueType_t   _type                       = FactMetaData::valueTypeInt32;
+    FactMetaData*               _metaData                   = nullptr;
+    bool                        _sendValueChangedSignals    = true;
+    bool                        _deferredValueChangeSignal  = false;
+    FactValueSliderListModel*   _valueSliderModel           = nullptr;
+    bool                        _ignoreQGCRebootRequired    = false;
+    bool                        _telemetryLost              = false;
 };
 
 #endif

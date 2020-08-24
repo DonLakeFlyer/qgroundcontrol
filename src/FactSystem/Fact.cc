@@ -754,3 +754,11 @@ void Fact::_setIgnoreQGCRebootRequired(bool ignore)
 {
     _ignoreQGCRebootRequired = ignore;
 }
+
+void Fact::setTelemetryLost(bool telemetryLost)
+{
+    if (_telemetryLost != telemetryLost) {
+        _telemetryLost = telemetryLost;
+        emit telemetryLostChanged(_telemetryLost);
+    }
+}

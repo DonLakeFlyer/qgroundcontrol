@@ -23,7 +23,7 @@ FactGroup::FactGroup(int updateRateMsecs, const QString& metaDataFile, QObject* 
     , _updateRateMSecs(updateRateMsecs)
     , _ignoreCamelCase(ignoreCamelCase)
 {
-    _setupTimer();
+    _init();
     _nameToFactMetaDataMap = FactMetaData::createMapFromJsonFile(metaDataFile, this);
 }
 
@@ -32,7 +32,7 @@ FactGroup::FactGroup(int updateRateMsecs, QObject* parent, bool ignoreCamelCase)
     , _updateRateMSecs(updateRateMsecs)
     , _ignoreCamelCase(ignoreCamelCase)
 {
-    _setupTimer();
+    _init();
 }
 
 void FactGroup::_loadFromJsonArray(const QJsonArray jsonArray)
@@ -41,7 +41,7 @@ void FactGroup::_loadFromJsonArray(const QJsonArray jsonArray)
     _nameToFactMetaDataMap = FactMetaData::createMapFromJsonArray(jsonArray, defineMap, this);
 }
 
-void FactGroup::_setupTimer()
+void FactGroup::_init()
 {
     if (_updateRateMSecs > 0) {
         connect(&_updateTimer, &QTimer::timeout, this, &FactGroup::_updateAllValues);
@@ -151,8 +151,24 @@ void FactGroup::_addFactGroup(FactGroup* factGroup, const QString& name)
 
 void FactGroup::_updateAllValues(void)
 {
-    for(Fact* fact: _nameToFactMap) {
+    for (Fact* fact: _nameToFactMap) {
         fact->sendDeferredValueChangedSignal();
+    }
+
+    if (_lastTelemetryUpdate.isValid()) {
+        bool newTelemetryLost;
+        if (_lastTelemetryUpdate.elapsed() > _updateRateMSecs) {
+            newTelemetryLost = true;
+        } else {
+            newTelemetryLost = false;
+        }
+        if (_telemetryLost != newTelemetryLost) {
+            _telemetryLost = newTelemetryLost;
+            emit telemetryLostChanged(newTelemetryLost);
+            for (Fact* fact: _nameToFactMap) {
+                fact->setTelemetryLost(newTelemetryLost);
+            }
+        }
     }
 }
 
@@ -167,7 +183,7 @@ void FactGroup::setLiveUpdates(bool liveUpdates)
     } else {
         _updateTimer.start();
     }
-    for(Fact* fact: _nameToFactMap) {
+    for (Fact* fact: _nameToFactMap) {
         fact->setSendValueChangedSignals(liveUpdates);
     }
 }
@@ -178,7 +194,13 @@ QString FactGroup::_camelCase(const QString& text)
     return text[0].toLower() + text.right(text.length() - 1);
 }
 
-void FactGroup::handleMessage(Vehicle* /* vehicle */, mavlink_message_t& /* message */)
+void FactGroup::handleMessage(Vehicle* vehicle, mavlink_message_t& /* message */)
 {
-    // Default implementation does nothing
+    if (_vehicle) {
+        if (vehicle != _vehicle) {
+        qWarning() << "FactGroup::handleMessage Internal error: Messages received from multiple vehicles";
+        }
+    } else {
+        _vehicle = vehicle;
+    }
 }

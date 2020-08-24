@@ -148,28 +148,28 @@ void MockLink::_disconnect(void)
 
 void MockLink::run(void)
 {
-    QTimer  timer1HzTasks;
+    QTimer  timer2HzTasks;
     QTimer  timer10HzTasks;
     QTimer  timer500HzTasks;
 
-    QObject::connect(&timer1HzTasks,  &QTimer::timeout, this, &MockLink::_run1HzTasks);
+    QObject::connect(&timer2HzTasks,  &QTimer::timeout, this, &MockLink::_run2HzTasks);
     QObject::connect(&timer10HzTasks, &QTimer::timeout, this, &MockLink::_run10HzTasks);
     QObject::connect(&timer500HzTasks, &QTimer::timeout, this, &MockLink::_run500HzTasks);
 
-    timer1HzTasks.start(1000);
-    timer10HzTasks.start(100);
-    timer500HzTasks.start(2);
+    timer2HzTasks.start     (500);
+    timer10HzTasks.start    (100);
+    timer500HzTasks.start   (2);
 
     exec();
 
-    QObject::disconnect(&timer1HzTasks,  &QTimer::timeout, this, &MockLink::_run1HzTasks);
+    QObject::disconnect(&timer2HzTasks,  &QTimer::timeout, this, &MockLink::_run2HzTasks);
     QObject::disconnect(&timer10HzTasks, &QTimer::timeout, this, &MockLink::_run10HzTasks);
     QObject::disconnect(&timer500HzTasks, &QTimer::timeout, this, &MockLink::_run500HzTasks);
 
     _missionItemHandler.shutdown();
 }
 
-void MockLink::_run1HzTasks(void)
+void MockLink::_run2HzTasks(void)
 {
     if (_mavlinkStarted && _connected) {
         if (_highLatency) {
@@ -416,6 +416,15 @@ void MockLink::_sendBatteryStatus(void)
         rgVoltagesNone[i]   = UINT16_MAX;
     }
     rgVoltages[0] = rgVoltages[1] = rgVoltages[2] = 4200;
+
+    // Failed telemetry every other 10 seconds
+    static int sendCount = 0;
+    if (sendCount++ > 20) {
+        if (sendCount++ > 40) {
+            sendCount = 0;
+        }
+        return;
+    }
 
     mavlink_msg_battery_status_pack_chan(
                 _vehicleSystemId,

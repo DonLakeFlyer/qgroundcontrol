@@ -12,6 +12,7 @@ import QtQuick.Layouts  1.11
 
 import QGroundControl                       1.0
 import QGroundControl.Controls              1.0
+import QGroundControl.FactControls          1.0
 import QGroundControl.MultiVehicleManager   1.0
 import QGroundControl.ScreenTools           1.0
 import QGroundControl.Palette               1.0
@@ -59,6 +60,9 @@ Item {
             anchors.bottom: parent.bottom
 
             function getBatteryColor() {
+                if (battery.telemetryLost) {
+                    return qgcPal.colorRed
+                }
                 switch (battery.chargeState.rawValue) {
                 case MAVLink.MAV_BATTERY_CHARGE_STATE_OK:
                     return qgcPal.text
@@ -102,6 +106,7 @@ Item {
             QGCLabel {
                 text:                   getBatteryPercentageText()
                 font.pointSize:         ScreenTools.mediumFontPointSize
+                font.strikeout:         battery.telemetryLost
                 color:                  getBatteryColor()
                 anchors.verticalCenter: parent.verticalCenter
             }
@@ -192,13 +197,13 @@ Item {
                                 }
 
                                 QGCLabel { text: "" }
-                                QGCLabel { text: object.chargeState.enumStringValue;                                        visible: batteryValuesAvailable.chargeStateAvailable }
-                                QGCLabel { text: object.timeRemainingStr.value;                                             visible: batteryValuesAvailable.timeRemainingAvailable }
-                                QGCLabel { text: object.percentRemaining.valueString + " " + object.percentRemaining.units }
-                                QGCLabel { text: object.voltage.valueString + " " + object.voltage.units }
-                                QGCLabel { text: object.mahConsumed.valueString + " " + object.mahConsumed.units;           visible: batteryValuesAvailable.mahConsumedAvailable }
-                                QGCLabel { text: object.temperature.valueString + " " + object.temperature.units;           visible: batteryValuesAvailable.temperatureAvailable }
-                                QGCLabel { text: object.function.enumStringValue;                                           visible: batteryValuesAvailable.functionAvailable }
+                                FactLabel { fact: object.chargeState;       visible: batteryValuesAvailable.chargeStateAvailable }
+                                FactLabel { fact: object.timeRemainingStr;  visible: batteryValuesAvailable.timeRemainingAvailable }
+                                FactLabel { fact: object.percentRemaining }
+                                FactLabel { fact: object.voltage }
+                                FactLabel { fact: object.mahConsumed;       visible: batteryValuesAvailable.mahConsumedAvailable }
+                                FactLabel { fact: object.temperature;       visible: batteryValuesAvailable.temperatureAvailable }
+                                FactLabel { fact: object.function;          visible: batteryValuesAvailable.functionAvailable }
                             }
                         }
                     }

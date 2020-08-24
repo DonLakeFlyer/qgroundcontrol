@@ -16,6 +16,7 @@
 #include <QStringList>
 #include <QMap>
 #include <QTimer>
+#include <QElapsedTimer>
 
 class Vehicle;
 
@@ -28,8 +29,9 @@ public:
     FactGroup(int updateRateMsecs, const QString& metaDataFile, QObject* parent = nullptr, bool ignoreCamelCase = false);
     FactGroup(int updateRateMsecs, QObject* parent = nullptr, bool ignoreCamelCase = false);
 
-    Q_PROPERTY(QStringList factNames        READ factNames      NOTIFY factNamesChanged)
-    Q_PROPERTY(QStringList factGroupNames   READ factGroupNames NOTIFY factGroupNamesChanged)
+    Q_PROPERTY(QStringList  factNames       READ factNames      NOTIFY factNamesChanged)
+    Q_PROPERTY(QStringList  factGroupNames  READ factGroupNames NOTIFY factGroupNamesChanged)
+    Q_PROPERTY(bool         telemetryLost   READ telemetryLost  NOTIFY telemetryLostChanged)    ///< true: values have not been updated for more than updateRateMSecs
 
     /// @ return true: if the fact exists in the group
     Q_INVOKABLE bool factExists(const QString& name);
@@ -45,15 +47,18 @@ public:
     /// Turning on live updates will allow value changes to flow through as they are received.
     Q_INVOKABLE void setLiveUpdates(bool liveUpdates);
 
-    QStringList factNames(void) const { return _factNames; }
-    QStringList factGroupNames(void) const { return _nameToFactGroupMap.keys(); }
+    QStringList factNames       (void) const { return _factNames; }
+    QStringList factGroupNames  (void) const { return _nameToFactGroupMap.keys(); }
+    bool        telemetryLost   (void) const { return _telemetryLost; }
 
-    /// Allows a FactGroup to parse incoming messages and fill in values
+    /// Allows a FactGroup to parse incoming messages and fill in values.
+    /// If you override make sure to call base class first.
     virtual void handleMessage(Vehicle* vehicle, mavlink_message_t& message);
 
 signals:
     void factNamesChanged       (void);
     void factGroupNamesChanged  (void);
+    void telemetryLostChanged   (bool telemetryLost);
 
 protected slots:
     virtual void _updateAllValues(void);
@@ -70,10 +75,15 @@ protected:
     QMap<QString, FactMetaData*>    _nameToFactMetaDataMap;
     QStringList                     _factNames;
 
+    bool            _firstTelemetryUpdate   = false;    ///< true: group has received at least one telemetry update
+    QElapsedTimer   _lastTelemetryUpdate;
+
 private:
-    void    _setupTimer (void);
+    void    _init       (void);
     QString _camelCase  (const QString& text);
 
-    bool    _ignoreCamelCase = false;
-    QTimer  _updateTimer;
+    bool            _ignoreCamelCase    = false;
+    Vehicle*        _vehicle            = nullptr;
+    bool            _telemetryLost      = false;        ///< true: values have not been updated for more than updateRateMSecs
+    QTimer          _updateTimer;
 };

@@ -38,6 +38,7 @@ ColumnLayout {
         id:                 label
         Layout.alignment:   Qt.AlignVCenter
         font.pointSize:     _fontSize
+        font.strikeout:     instrumentValueData.fact ? instrumentValueData.fact.telemetryLost : false
         text:               valueText()
 
         function valueText() {
