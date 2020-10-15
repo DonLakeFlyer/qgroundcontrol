@@ -23,7 +23,7 @@ class MockLinkFTP : public QObject
     Q_OBJECT
     
 public:
-    MockLinkFTP(uint8_t systemIdServer, uint8_t componentIdServer, MockLink* mockLink);
+    MockLinkFTP(MockLink* mockLink, int vehicleId);
     
     /// @brief Sets the list of files returned by the List command. Prepend names with F or D
     /// to indicate (F)ile or (D)irectory.
@@ -81,16 +81,16 @@ private:
     /// if request is a string, this ensures it's null-terminated
     static void ensureNullTemination(MavlinkFTP::Request* request);
 
+    MockLink*               _mockLink           = nullptr;
+    int                     _vehicleId          = 0;
+
     QStringList _fileList;  ///< List of files returned by List command
     
     QFile                   _currentFile;
     ErrorMode_t             _errMode            = errModeNone;  ///< Currently set error mode, as specified by setErrorMode
-    const uint8_t           _systemIdServer;                    ///< System ID for server
-    const uint8_t           _componentIdServer;                 ///< Component ID for server
-    MockLink*               _mockLink;                          ///< MockLink to communicate through
-    bool                    _lastReplyValid     = false;
     uint16_t                _lastReplySequence  = 0;
     mavlink_message_t       _lastReply;
+    bool                    _lastReplyValid     = false;
     bool                    _randomDropsEnabled = false;
 
     static const uint8_t    _sessionId          = 1;    ///< We only support a single fixed session

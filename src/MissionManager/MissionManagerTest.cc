@@ -104,7 +104,7 @@ void MissionManagerTest::_writeItems(MockLinkMissionItemHandler::FailureMode_t f
         // Validate item count in mission manager
 
         int expectedCount = (int)_cTestCases;
-        if (_mockLink->getFirmwareType() == MAV_AUTOPILOT_ARDUPILOTMEGA) {
+        if (_mockLink->mockConfig()->firmware() == MAV_AUTOPILOT_ARDUPILOTMEGA) {
             // Home position at position 0 comes from vehicle
             expectedCount++;
         }
@@ -174,7 +174,7 @@ void MissionManagerTest::_roundTripItems(MockLinkMissionItemHandler::FailureMode
         cMissionItemsExpected = 0;
     } else {
         cMissionItemsExpected = (int)_cTestCases;
-        if (_mockLink->getFirmwareType() == MAV_AUTOPILOT_ARDUPILOTMEGA) {
+        if (_mockLink->mockConfig()->firmware() == MAV_AUTOPILOT_ARDUPILOTMEGA) {
             // Home position at position 0 comes from vehicle
             cMissionItemsExpected++;
         }
@@ -183,7 +183,7 @@ void MissionManagerTest::_roundTripItems(MockLinkMissionItemHandler::FailureMode
     QCOMPARE(_missionManager->missionItems().count(), (int)cMissionItemsExpected);
 
     int firstActualItem = 0;
-    if (_mockLink->getFirmwareType() == MAV_AUTOPILOT_ARDUPILOTMEGA) {
+    if (_mockLink->mockConfig()->firmware() == MAV_AUTOPILOT_ARDUPILOTMEGA) {
         // First item is home position, don't validate it
         firstActualItem++;
     }
@@ -193,7 +193,7 @@ void MissionManagerTest::_roundTripItems(MockLinkMissionItemHandler::FailureMode
         const TestCase_t* testCase = &_rgTestCases[testCaseIndex];
 
         int expectedSequenceNumber = testCase->expectedItem.sequenceNumber;
-        if (_mockLink->getFirmwareType() == MAV_AUTOPILOT_ARDUPILOTMEGA) {
+        if (_mockLink->mockConfig()->firmware() == MAV_AUTOPILOT_ARDUPILOTMEGA) {
             // Account for home position in first item
             expectedSequenceNumber++;
         }

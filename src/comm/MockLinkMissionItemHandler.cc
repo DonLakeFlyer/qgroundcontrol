@@ -7,7 +7,6 @@
  *
  ****************************************************************************/
 
-
 #include "MockLinkMissionItemHandler.h"
 #include "MockLink.h"
 
@@ -15,17 +14,13 @@
 
 QGC_LOGGING_CATEGORY(MockLinkMissionItemHandlerLog, "MockLinkMissionItemHandlerLog")
 
-MockLinkMissionItemHandler::MockLinkMissionItemHandler(MockLink* mockLink, MAVLinkProtocol* mavlinkProtocol)
-    : _mockLink(mockLink)
-    , _missionItemResponseTimer(nullptr)
-    , _failureMode(FailNone)
-    , _sendHomePositionOnEmptyList(false)
-    , _mavlinkProtocol(mavlinkProtocol)
-    , _failReadRequestListFirstResponse(true)
-    , _failReadRequest1FirstResponse(true)
-    , _failWriteMissionCountFirstResponse(true)
+MockLinkMissionItemHandler::MockLinkMissionItemHandler(MockLink* mockLink, int vehicleId, int gcsSystemId, int gcsComponentId)
+    : _mockLink         (mockLink)
+    , _vehicleId        (vehicleId)
+    , _gcsSystemId      (gcsSystemId)
+    , _gcsComponentId   (gcsComponentId)
 {
-    Q_ASSERT(mockLink);
+
 }
 
 MockLinkMissionItemHandler::~MockLinkMissionItemHandler()
@@ -91,7 +86,7 @@ void MockLinkMissionItemHandler::_handleMissionClearAll(const mavlink_message_t&
 
     mavlink_msg_mission_clear_all_decode(&msg, &clearAll);
 
-    Q_ASSERT(clearAll.target_system == _mockLink->vehicleId());
+    Q_ASSERT(clearAll.target_system == _vehicleId);
 
     _requestType = (MAV_MISSION_TYPE)clearAll.mission_type;
     qCDebug(MockLinkMissionItemHandlerLog) << QStringLiteral("_handleMissionClearAll %1").arg(_requestType);
@@ -135,7 +130,7 @@ void MockLinkMissionItemHandler::_handleMissionRequestList(const mavlink_message
         _failReadRequestListFirstResponse = true;
         mavlink_msg_mission_request_list_decode(&msg, &request);
         
-        Q_ASSERT(request.target_system == _mockLink->vehicleId());
+        Q_ASSERT(request.target_system == _vehicleId);
 
         _requestType = (MAV_MISSION_TYPE)request.mission_type;
 
@@ -159,7 +154,7 @@ void MockLinkMissionItemHandler::_handleMissionRequestList(const mavlink_message
         
         mavlink_message_t   responseMsg;
         
-        mavlink_msg_mission_count_pack_chan(_mockLink->vehicleId(),
+        mavlink_msg_mission_count_pack_chan(_vehicleId,
                                             MAV_COMP_ID_AUTOPILOT1,
                                             _mockLink->mavlinkChannel(),
                                             &responseMsg,               // Outgoing message
@@ -179,7 +174,7 @@ void MockLinkMissionItemHandler::_handleMissionRequest(const mavlink_message_t& 
     
     mavlink_msg_mission_request_decode(&msg, &request);
     
-    Q_ASSERT(request.target_system == _mockLink->vehicleId());
+    Q_ASSERT(request.target_system == _vehicleId);
 
     if (_failureMode == FailReadRequest0NoResponse && request.seq == 0) {
         qCDebug(MockLinkMissionItemHandlerLog) << "_handleMissionRequest not responding due to failure mode FailReadRequest0NoResponse";
@@ -228,7 +223,7 @@ void MockLinkMissionItemHandler::_handleMissionRequest(const mavlink_message_t& 
             mavlink_message_t responseMsg;
             if (missionItemBoth.isIntItem) {
                 mavlink_mission_item_int_t& item = missionItemBoth.missionItemInt;
-                mavlink_msg_mission_item_int_pack_chan(_mockLink->vehicleId(),
+                mavlink_msg_mission_item_int_pack_chan(_vehicleId,
                                                    MAV_COMP_ID_AUTOPILOT1,
                                                    _mockLink->mavlinkChannel(),
                                                    &responseMsg,            // Outgoing message
@@ -244,7 +239,7 @@ void MockLinkMissionItemHandler::_handleMissionRequest(const mavlink_message_t& 
                                                    _requestType);
             } else {
                 mavlink_mission_item_t& item = missionItemBoth.missionItem;
-                mavlink_msg_mission_item_pack_chan(_mockLink->vehicleId(),
+                mavlink_msg_mission_item_pack_chan(_vehicleId,
                                                    MAV_COMP_ID_AUTOPILOT1,
                                                    _mockLink->mavlinkChannel(),
                                                    &responseMsg,            // Outgoing message
@@ -269,7 +264,7 @@ void MockLinkMissionItemHandler::_handleMissionCount(const mavlink_message_t& ms
     mavlink_mission_count_t missionCount;
     
     mavlink_msg_mission_count_decode(&msg, &missionCount);
-    Q_ASSERT(missionCount.target_system == _mockLink->vehicleId());
+    Q_ASSERT(missionCount.target_system == _vehicleId);
     
     _requestType = (MAV_MISSION_TYPE)missionCount.mission_type;
     _writeSequenceCount = missionCount.count;
@@ -331,12 +326,12 @@ void MockLinkMissionItemHandler::_requestNextMissionItem(int sequenceNumber)
         } else {
             mavlink_message_t message;
 
-            mavlink_msg_mission_request_pack_chan(_mockLink->vehicleId(),
+            mavlink_msg_mission_request_pack_chan(_vehicleId,
                                                   MAV_COMP_ID_AUTOPILOT1,
                                                   _mockLink->mavlinkChannel(),
                                                   &message,
-                                                  _mavlinkProtocol->getSystemId(),
-                                                  _mavlinkProtocol->getComponentId(),
+                                                  _gcsSystemId,
+                                                  _gcsComponentId,
                                                   sequenceNumber,
                                                   _requestType);
             _mockLink->respondWithMavlinkMessage(message);
@@ -353,12 +348,12 @@ void MockLinkMissionItemHandler::_sendAck(MAV_MISSION_RESULT ackType)
     
     mavlink_message_t message;
     
-    mavlink_msg_mission_ack_pack_chan(_mockLink->vehicleId(),
+    mavlink_msg_mission_ack_pack_chan(_vehicleId,
                                       MAV_COMP_ID_AUTOPILOT1,
                                       _mockLink->mavlinkChannel(),
                                       &message,
-                                      _mavlinkProtocol->getSystemId(),
-                                      _mavlinkProtocol->getComponentId(),
+                                      _gcsSystemId,
+                                      _gcsComponentId,
                                       ackType,
                                       _requestType);
     _mockLink->respondWithMavlinkMessage(message);

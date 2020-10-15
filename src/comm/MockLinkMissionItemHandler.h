@@ -7,7 +7,6 @@
  *
  ****************************************************************************/
 
-
 #pragma once
 
 #include <QObject>
@@ -16,7 +15,6 @@
 
 #include "QGCMAVLink.h"
 #include "QGCLoggingCategory.h"
-#include "MAVLinkProtocol.h"
 
 class MockLink;
 
@@ -27,7 +25,7 @@ class MockLinkMissionItemHandler : public QObject
     Q_OBJECT
 
 public:
-    MockLinkMissionItemHandler(MockLink* mockLink, MAVLinkProtocol* mavlinkProtocol);
+    MockLinkMissionItemHandler(MockLink* mockLink, int vehicleId, int gcsSystemId, int gcsComponentId);
     ~MockLinkMissionItemHandler();
     
     // Prepares for destruction on correct thread
@@ -94,7 +92,10 @@ private:
     void _startMissionItemResponseTimer(void);
 
 private:
-    MockLink* _mockLink;
+    MockLink*   _mockLink       = nullptr;
+    int         _vehicleId      = 0;
+    int         _gcsSystemId    = 0;
+    int         _gcsComponentId = 0;
     
     int _writeSequenceCount;    ///< Numbers of items about to be written
     int _writeSequenceIndex;    ///< Current index being reqested
@@ -114,13 +115,12 @@ private:
     MissionItemList_t   _fenceItems;
     MissionItemList_t   _rallyItems;
 
-    QTimer*             _missionItemResponseTimer;
-    FailureMode_t       _failureMode;
+    QTimer*             _missionItemResponseTimer = nullptr;
+    FailureMode_t       _failureMode = FailNone;
     MAV_MISSION_RESULT  _failureAckResult;
-    bool                _sendHomePositionOnEmptyList;
-    MAVLinkProtocol*    _mavlinkProtocol;
-    bool                _failReadRequestListFirstResponse;
-    bool                _failReadRequest1FirstResponse;
-    bool                _failWriteMissionCountFirstResponse;
+    bool                _sendHomePositionOnEmptyList = false;
+    bool                _failReadRequestListFirstResponse = true;
+    bool                _failReadRequest1FirstResponse = true;
+    bool                _failWriteMissionCountFirstResponse = true;
 };
 

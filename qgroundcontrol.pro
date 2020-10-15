@@ -734,9 +734,11 @@ HEADERS += \
 
 DebugBuild {
 HEADERS += \
+    src/comm/MockConfiguration.h \
     src/comm/MockLink.h \
     src/comm/MockLinkFTP.h \
     src/comm/MockLinkMissionItemHandler.h \
+    src/comm/MockVehicle.h \
 }
 
 WindowsBuild {
@@ -958,9 +960,11 @@ contains (DEFINES, QGC_ENABLE_PAIRING) {
 
 DebugBuild {
 SOURCES += \
+    src/comm/MockConfiguration.cc \
     src/comm/MockLink.cc \
     src/comm/MockLinkFTP.cc \
     src/comm/MockLinkMissionItemHandler.cc \
+    src/comm/MockVehicle.cc \
 }
 
 !NoSerialBuild {

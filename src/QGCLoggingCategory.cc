@@ -7,10 +7,6 @@
  *
  ****************************************************************************/
 
-
-/// @file
-///     @author Don Gagne <don@thegagnes.com>
-
 #include "QGCLoggingCategory.h"
 
 #include <QSettings>
@@ -26,6 +22,10 @@ QGC_LOGGING_CATEGORY(RTKGPSLog,                     "RTKGPSLog")
 QGC_LOGGING_CATEGORY(GuidedActionsControllerLog,    "GuidedActionsControllerLog")
 QGC_LOGGING_CATEGORY(ADSBVehicleManagerLog,         "ADSBVehicleManagerLog")
 QGC_LOGGING_CATEGORY(LocalizationLog,               "LocalizationLog")
+#ifdef QT_DEBUG
+QGC_LOGGING_CATEGORY(MockLinkLog,                   "MockLinkLog")
+QGC_LOGGING_CATEGORY(MockLinkVerboseLog,            "MockLinkVerboseLog")
+#endif
 
 QGCLoggingCategoryRegister* _instance = nullptr;
 const char* QGCLoggingCategoryRegister::_filterRulesSettingsGroup = "LoggingFilters";

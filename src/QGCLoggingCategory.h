@@ -23,6 +23,10 @@ Q_DECLARE_LOGGING_CATEGORY(RTKGPSLog)
 Q_DECLARE_LOGGING_CATEGORY(GuidedActionsControllerLog)
 Q_DECLARE_LOGGING_CATEGORY(ADSBVehicleManagerLog)
 Q_DECLARE_LOGGING_CATEGORY(LocalizationLog)
+#ifdef QT_DEBUG
+Q_DECLARE_LOGGING_CATEGORY(MockLinkLog)
+Q_DECLARE_LOGGING_CATEGORY(MockLinkVerboseLog)
+#endif
 
 /// @def QGC_LOGGING_CATEGORY
 /// This is a QGC specific replacement for Q_LOGGING_CATEGORY. It will register the category name into a

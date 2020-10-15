@@ -7,9 +7,9 @@
  *
  ****************************************************************************/
 
-
 #include "MockLinkFTP.h"
 #include "MockLink.h"
+#include "QGCTemporaryFile.h"
 
 const MockLinkFTP::ErrorMode_t MockLinkFTP::rgFailureModes[] = {
     MockLinkFTP::errModeNoResponse,
@@ -22,10 +22,9 @@ const size_t MockLinkFTP::cFailureModes = sizeof(MockLinkFTP::rgFailureModes) / 
 
 const char* MockLinkFTP::sizeFilenamePrefix = "mocklink-size-";
 
-MockLinkFTP::MockLinkFTP(uint8_t systemIdServer, uint8_t componentIdServer, MockLink* mockLink)
-    : _systemIdServer   (systemIdServer)
-    , _componentIdServer(componentIdServer)
-    , _mockLink         (mockLink)
+MockLinkFTP::MockLinkFTP(MockLink* mockLink, int vehicleId)
+    : _mockLink (mockLink)
+    , _vehicleId(vehicleId)
 {
     srand(0); // make sure unit tests are deterministic
 }
@@ -270,7 +269,7 @@ void MockLinkFTP::mavlinkMessageReceived(const mavlink_message_t& message)
     mavlink_file_transfer_protocol_t requestFTP;
     mavlink_msg_file_transfer_protocol_decode(&message, &requestFTP);
     
-    if (requestFTP.target_system != _systemIdServer) {
+    if (requestFTP.target_system != _vehicleId) {
         return;
     }
 
@@ -392,8 +391,8 @@ void MockLinkFTP::_sendResponse(uint8_t targetSystemId, uint8_t targetComponentI
     _lastReplySequence      = seqNumber;
     _lastReplyValid         = true;
     
-    mavlink_msg_file_transfer_protocol_pack_chan(_systemIdServer,               // System ID
-                                                 _componentIdServer,            // Component ID
+    mavlink_msg_file_transfer_protocol_pack_chan(_vehicleId,
+                                                 MAV_COMP_ID_AUTOPILOT1,
                                                  _mockLink->mavlinkChannel(),
                                                  &_lastReply,                   // Mavlink Message to pack into
                                                  0,                             // Target network

@@ -11,6 +11,7 @@
 #include "MultiVehicleManager.h"
 #include "QGCApplication.h"
 #include "MockLink.h"
+#include "MockVehicle.h"
 #include "FTPManager.h"
 
 const FTPManagerTest::TestCase_t FTPManagerTest::_rgTestCases[] = {
@@ -100,7 +101,7 @@ void FTPManagerTest::_testLostPackets(void)
 
     QSignalSpy spyDownloadComplete(ftpManager, &FTPManager::downloadComplete);
 
-    _mockLink->mockLinkFTP()->enableRandromDrops(true);
+    _mockLink->vehicle1()->mockLinkFTP()->enableRandromDrops(true);
     ftpManager->download(filename, QStandardPaths::writableLocation(QStandardPaths::TempLocation));
 
     QCOMPARE(spyDownloadComplete.wait(10000), true);
