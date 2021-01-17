@@ -26,7 +26,7 @@
 #include "MissionController.h"
 
 class MissionItem;
-class PlanMasterController;
+class Vehicle;
 class MissionController;
 class TerrainAtCoordinateQuery;
 
@@ -36,8 +36,8 @@ class VisualMissionItem : public QObject
     Q_OBJECT
 
 public:
-    VisualMissionItem(PlanMasterController* masterController, bool flyView, QObject* parent);
-    VisualMissionItem(const VisualMissionItem& other, bool flyView, QObject* parent);
+    VisualMissionItem(Vehicle* vehicle, QObject* parent);
+    VisualMissionItem(const VisualMissionItem& other, QObject* parent);
 
     ~VisualMissionItem();
 
@@ -79,11 +79,10 @@ public:
     Q_PROPERTY(double           specifiedVehicleYaw                 READ specifiedVehicleYaw                                                NOTIFY specifiedVehicleYawChanged)                  ///< NaN for not specified
     Q_PROPERTY(double           missionGimbalYaw                    READ missionGimbalYaw                                                   NOTIFY missionGimbalYawChanged)                     ///< Current gimbal yaw state at this point in mission
     Q_PROPERTY(double           missionVehicleYaw                   READ missionVehicleYaw                                                  NOTIFY missionVehicleYawChanged)                    ///< Expected vehicle yaw at this point in mission
-    Q_PROPERTY(bool             flyView                             READ flyView                                                            CONSTANT)
     Q_PROPERTY(bool             wizardMode                          READ wizardMode                         WRITE setWizardMode             NOTIFY wizardModeChanged)
     Q_PROPERTY(int              previousVTOLMode                    MEMBER _previousVTOLMode                                                NOTIFY previousVTOLModeChanged)                     ///< Current VTOL mode (VehicleClass_t) prior to executing this item
 
-    Q_PROPERTY(PlanMasterController*    masterController    READ masterController                                                   CONSTANT)
+    Q_PROPERTY(Vehicle*                 vehicle             READ vehicle                                                            CONSTANT)
     Q_PROPERTY(ReadyForSaveState        readyForSaveState   READ readyForSaveState                                                  NOTIFY readyForSaveStateChanged)
     Q_PROPERTY(VisualMissionItem*       parentItem          READ parentItem                        WRITE setParentItem              NOTIFY parentItemChanged)
     Q_PROPERTY(QmlObjectListModel*      childItems          READ childItems                                                         CONSTANT)
@@ -111,7 +110,6 @@ public:
     bool    isCurrentItem       (void) const { return _isCurrentItem; }
     bool    hasCurrentChildItem (void) const { return _hasCurrentChildItem; }
     double  terrainAltitude     (void) const { return _terrainAltitude; }
-    bool    flyView             (void) const { return _flyView; }
     bool    wizardMode          (void) const { return _wizardMode; }
     VisualMissionItem* parentItem(void) { return _parentItem; }
 
@@ -135,7 +133,7 @@ public:
     void setSimpleFlighPathSegment  (FlightPathSegment* segment) { _simpleFlightPathSegment = segment; }
     void clearSimpleFlighPathSegment(void) { _simpleFlightPathSegment = nullptr; }
 
-    PlanMasterController* masterController(void) { return _masterController; }
+    Vehicle* vehicle(void) { return _vehicle; }
 
     // Pure virtuals which must be provides by derived classes
 
@@ -250,7 +248,7 @@ protected slots:
     void _amslExitAltChanged(void);     // signals new amslExitAlt value
 
 protected:
-    bool                         _flyView                   = false;
+    Vehicle*                    _vehicle                    = nullptr;
     bool                        _isCurrentItem              = false;
     bool                        _hasCurrentChildItem        = false;
     bool                        _dirty                      = false;
@@ -268,13 +266,9 @@ protected:
     double                      _missionGimbalYaw           = qQNaN();
     double                      _missionVehicleYaw          = qQNaN();
     QGCMAVLink::VehicleClass_t  _previousVTOLMode           = QGCMAVLink::VehicleClassGeneric;  ///< Generic == unknown
-
-    PlanMasterController*   _masterController           = nullptr;
-    MissionController*      _missionController          = nullptr;
-    Vehicle*                _controllerVehicle          = nullptr;
-    FlightPathSegment *     _simpleFlightPathSegment    = nullptr;  ///< The simple item flight segment (if any) which starts with this visual item.
-    VisualMissionItem*      _parentItem                 = nullptr;
-    QGCGeoBoundingCube      _boundingCube;                          ///< The bounding "cube" of this element.
+    FlightPathSegment *         _simpleFlightPathSegment    = nullptr;                          ///< The simple item flight segment (if any) which starts with this visual item.
+    VisualMissionItem*          _parentItem                 = nullptr;
+    QGCGeoBoundingCube          _boundingCube;                                                  ///< The bounding "cube" of this element.
 
     /// This is used to reference any subsequent mission items which do not specify a coordinate.
     QmlObjectListModel  _childItems;

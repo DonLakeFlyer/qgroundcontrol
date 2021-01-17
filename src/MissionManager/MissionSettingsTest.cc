@@ -21,7 +21,7 @@ void MissionSettingsTest::init(void)
 {
     VisualMissionItemTest::init();
 
-    _settingsItem = new MissionSettingsItem(_masterController, false /* flyView */, this);
+    _settingsItem = new MissionSettingsItem(_offlineVehicle(), this);
 }
 
 void MissionSettingsTest::cleanup(void)

@@ -28,15 +28,16 @@ public:
     const StateFn*  rgStates        (void) const final;
     void            statesCompleted (void) const final;
 
+private slots:
+    void _planLoadComplete(void);
+
 private:
     static void _stateRequestCapabilities               (StateMachine* stateMachine);
     static void _stateRequestProtocolVersion            (StateMachine* stateMachine);
     static void _stateRequestCompInfo                   (StateMachine* stateMachine);
     static void _stateRequestCompInfoComplete           (void* requestAllCompleteFnData);
     static void _stateRequestParameters                 (StateMachine* stateMachine);
-    static void _stateRequestMission                    (StateMachine* stateMachine);
-    static void _stateRequestGeoFence                   (StateMachine* stateMachine);
-    static void _stateRequestRallyPoints                (StateMachine* stateMachine);
+    static void _stateRequestPlan                       (StateMachine* stateMachine);
     static void _stateSignalInitialConnectComplete      (StateMachine* stateMachine);
 
     static void _capabilitiesCmdResultHandler           (void* resultHandlerData, int compId, MAV_RESULT result, Vehicle::MavCmdResultFailureCode_t failureCode);

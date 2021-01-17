@@ -97,7 +97,7 @@ void SimpleMissionItemTest::init(void)
                             70.1234567,
                             true,           // autoContinue
                             false);         // isCurrentItem
-    _simpleItem = new SimpleMissionItem(_masterController, false /* flyView */, missionItem, this);
+    _simpleItem = new SimpleMissionItem(_offlineVehicle(), missionItem, this);
 
     // It's important top check that the right signals are emitted at the right time since that drives ui change.
     // It's also important to check that things are not being over-signalled when they should not be, since that can lead
@@ -123,7 +123,9 @@ void SimpleMissionItemTest::_testEditorFactsWorker(QGCMAVLink::VehicleClass_t ve
 {
     qDebug() << "vehicleClass:vtolMode" << QGCMAVLink::vehicleClassToString(vehicleClass) << QGCMAVLink::vehicleClassToString(vtolMode);
 
-    PlanMasterController planController(MAV_AUTOPILOT_PX4, QGCMAVLink::vehicleClassToMavType(vehicleClass));
+    _offlineVehicle()->_offlineFirmwareTypeSettingChanged(MAV_AUTOPILOT_PX4);
+    _offlineVehicle()->_offlineVehicleTypeSettingChanged(QGCMAVLink::vehicleClassToMavType(vehicleClass));
+    PlanMasterController planController(_offlineVehicle());
 
     QGCMAVLink::VehicleClass_t commandVehicleClass = vtolMode == QGCMAVLink::VehicleClassGeneric ? vehicleClass : vtolMode;
 
@@ -162,7 +164,7 @@ void SimpleMissionItemTest::_testEditorFactsWorker(QGCMAVLink::VehicleClass_t ve
                                 70.1234567,
                                 true,           // autoContinue
                                 false);         // isCurrentItem
-        SimpleMissionItem simpleMissionItem(&planController, false /* flyView */, missionItem, nullptr);
+        SimpleMissionItem simpleMissionItem(_offlineVehicle(), missionItem, nullptr);
 
         MissionController::MissionFlightStatus_t missionFlightStatus;
         missionFlightStatus.vtolMode        = vtolMode;
@@ -240,7 +242,7 @@ void SimpleMissionItemTest::_testEditorFacts(void)
 
 void SimpleMissionItemTest::_testDefaultValues(void)
 {
-    SimpleMissionItem item(_masterController, false /* flyView */, false /* forLoad */, nullptr);
+    SimpleMissionItem item(_offlineVehicle(), false /* forLoad */, nullptr);
 
     item.missionItem().setCommand(MAV_CMD_NAV_WAYPOINT);
     item.missionItem().setFrame(MAV_FRAME_GLOBAL_RELATIVE_ALT);

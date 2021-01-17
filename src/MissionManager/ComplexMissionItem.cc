@@ -11,9 +11,8 @@
 #include "QGCApplication.h"
 #include "QGCCorePlugin.h"
 #include "QGCOptions.h"
-#include "PlanMasterController.h"
 #include "FlightPathSegment.h"
-#include "MissionController.h"
+#include "PlanMasterController.h"
 
 #include <QCborValue>
 #include <QSettings>
@@ -22,8 +21,8 @@ const char* ComplexMissionItem::jsonComplexItemTypeKey = "complexItemType";
 
 const char* ComplexMissionItem::_presetSettingsKey =        "_presets";
 
-ComplexMissionItem::ComplexMissionItem(PlanMasterController* masterController, bool flyView, QObject* parent)
-    : VisualMissionItem (masterController, flyView, parent)
+ComplexMissionItem::ComplexMissionItem(Vehicle* vehicle, QObject* parent)
+    : VisualMissionItem (vehicle, parent)
     , _toolbox          (qgcApp()->toolbox())
     , _settingsManager  (_toolbox->settingsManager())
 {
@@ -120,9 +119,10 @@ void ComplexMissionItem::_appendFlightPathSegment(const QGeoCoordinate& coord1, 
 {
     FlightPathSegment* segment = new FlightPathSegment(coord1, coord1AMSLAlt, coord2, coord2AMSLAlt, true /* queryTerrainData */, this /* parent */);
 
+    auto missionController = _vehicle->planMasterController()->missionController();
     connect(segment, &FlightPathSegment::terrainCollisionChanged,       this,               &ComplexMissionItem::_segmentTerrainCollisionChanged);
-    connect(segment, &FlightPathSegment::terrainCollisionChanged,       _missionController, &MissionController::recalcTerrainProfile, Qt::QueuedConnection);
-    connect(segment, &FlightPathSegment::amslTerrainHeightsChanged,     _missionController, &MissionController::recalcTerrainProfile, Qt::QueuedConnection);
+    connect(segment, &FlightPathSegment::terrainCollisionChanged,       missionController,  &MissionController::recalcTerrainProfile, Qt::QueuedConnection);
+    connect(segment, &FlightPathSegment::amslTerrainHeightsChanged,     missionController,  &MissionController::recalcTerrainProfile, Qt::QueuedConnection);
 
     // Signals may have been emitted in contructor so we need to deal with that now since they were missed
 
@@ -132,7 +132,7 @@ void ComplexMissionItem::_appendFlightPathSegment(const QGeoCoordinate& coord1, 
     }
 
     if (segment->amslTerrainHeights().count()) {
-        _missionController->recalcTerrainProfile();
+        missionController->recalcTerrainProfile();
     }
 }
 

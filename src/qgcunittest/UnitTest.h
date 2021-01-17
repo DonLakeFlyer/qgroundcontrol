@@ -119,6 +119,8 @@ protected:
     void _disconnectMockLink(void);
     void _missionItemsEqual(MissionItem& actual, MissionItem& expected);
 
+    static Vehicle* _offlineVehicle(void);
+
     LinkManager*    _linkManager    = nullptr;
     MockLink*       _mockLink       = nullptr;
     Vehicle*        _vehicle        = nullptr;

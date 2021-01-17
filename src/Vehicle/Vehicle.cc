@@ -339,17 +339,6 @@ void Vehicle::_commonInit()
 
     connect(_toolbox->qgcPositionManager(), &QGCPositionManager::gcsPositionChanged, this, &Vehicle::_updateDistanceToGCS);
 
-    _missionManager = new MissionManager(this);
-    connect(_missionManager, &MissionManager::error,                    this, &Vehicle::_missionManagerError);
-    connect(_missionManager, &MissionManager::newMissionItemsAvailable, this, &Vehicle::_firstMissionLoadComplete);
-    connect(_missionManager, &MissionManager::newMissionItemsAvailable, this, &Vehicle::_clearCameraTriggerPoints);
-    connect(_missionManager, &MissionManager::sendComplete,             this, &Vehicle::_clearCameraTriggerPoints);
-    connect(_missionManager, &MissionManager::currentIndexChanged,      this, &Vehicle::_updateHeadingToNextWP);
-    connect(_missionManager, &MissionManager::currentIndexChanged,      this, &Vehicle::_updateMissionItemIndex);
-
-    connect(_missionManager, &MissionManager::sendComplete,             _trajectoryPoints, &TrajectoryPoints::clear);
-    connect(_missionManager, &MissionManager::newMissionItemsAvailable, _trajectoryPoints, &TrajectoryPoints::clear);
-
     _componentInformationManager    = new ComponentInformationManager   (this);
     _initialConnectStateMachine     = new InitialConnectStateMachine    (this);
     _ftpManager                     = new FTPManager                    (this);    
@@ -360,14 +349,15 @@ void Vehicle::_commonInit()
 
     _objectAvoidance = new VehicleObjectAvoidance(this, this);
 
-    // GeoFenceManager needs to access ParameterManager so make sure to create after
-    _geoFenceManager = new GeoFenceManager(this);
-    connect(_geoFenceManager, &GeoFenceManager::error,          this, &Vehicle::_geoFenceManagerError);
-    connect(_geoFenceManager, &GeoFenceManager::loadComplete,   this, &Vehicle::_firstGeoFenceLoadComplete);
+    _planMasterController = new PlanMasterController(this);
+    connect(_planMasterController, &PlanMasterController::sendComplete, this,               &Vehicle::_clearCameraTriggerPoints);
+    connect(_planMasterController, &PlanMasterController::loadComplete, this,               &Vehicle::_clearCameraTriggerPoints);
+    connect(_planMasterController, &PlanMasterController::loadComplete, _trajectoryPoints,  &TrajectoryPoints::clear);
+    connect(_planMasterController, &PlanMasterController::sendComplete, _trajectoryPoints,  &TrajectoryPoints::clear);
 
-    _rallyPointManager = new RallyPointManager(this);
-    connect(_rallyPointManager, &RallyPointManager::error,          this, &Vehicle::_rallyPointManagerError);
-    connect(_rallyPointManager, &RallyPointManager::loadComplete,   this, &Vehicle::_firstRallyPointLoadComplete);
+    MissionManager* missionManager = _planMasterController->missionManager();
+    connect(missionManager, &MissionManager::currentIndexChanged, this, &Vehicle::_updateHeadingToNextWP);
+    connect(missionManager, &MissionManager::currentIndexChanged, this, &Vehicle::_updateMissionItemIndex);
 
     // Flight modes can differ based on advanced mode
     connect(_toolbox->corePlugin(), &QGCCorePlugin::showAdvancedUIChanged, this, &Vehicle::flightModesChanged);
@@ -445,9 +435,6 @@ void Vehicle::_commonInit()
 Vehicle::~Vehicle()
 {
     qCDebug(VehicleLog) << "~Vehicle" << this;
-
-    delete _missionManager;
-    _missionManager = nullptr;
 
     delete _autopilotPlugin;
     _autopilotPlugin = nullptr;
@@ -1381,7 +1368,7 @@ void Vehicle::_handleBatteryStatus(mavlink_message_t& message)
     }
 }
 
-void Vehicle::_setHomePosition(QGeoCoordinate& homeCoord)
+void Vehicle::setHomePosition(const QGeoCoordinate& homeCoord)
 {
     if (homeCoord != _homePosition) {
         _homePosition = homeCoord;
@@ -1398,7 +1385,7 @@ void Vehicle::_handleHomePosition(mavlink_message_t& message)
     QGeoCoordinate newHomePosition (homePos.latitude / 10000000.0,
                                     homePos.longitude / 10000000.0,
                                     homePos.altitude / 1000.0);
-    _setHomePosition(newHomePosition);
+    setHomePosition(newHomePosition);
 }
 
 void Vehicle::_updateArmed(bool armed)
@@ -1997,24 +1984,6 @@ void Vehicle::sendMessageMultiple(mavlink_message_t message)
     _sendMessageMultipleList.append(info);
 }
 
-void Vehicle::_missionManagerError(int errorCode, const QString& errorMsg)
-{
-    Q_UNUSED(errorCode);
-    qgcApp()->showAppMessage(tr("Mission transfer failed. Error: %1").arg(errorMsg));
-}
-
-void Vehicle::_geoFenceManagerError(int errorCode, const QString& errorMsg)
-{
-    Q_UNUSED(errorCode);
-    qgcApp()->showAppMessage(tr("GeoFence transfer failed. Error: %1").arg(errorMsg));
-}
-
-void Vehicle::_rallyPointManagerError(int errorCode, const QString& errorMsg)
-{
-    Q_UNUSED(errorCode);
-    qgcApp()->showAppMessage(tr("Rally Point transfer failed. Error: %1").arg(errorMsg));
-}
-
 void Vehicle::_clearCameraTriggerPoints()
 {
     _cameraTriggerPoints.clearAndDeleteContents();
@@ -2036,26 +2005,6 @@ void Vehicle::_flightTimerStop()
 void Vehicle::_updateFlightTime()
 {
     _flightTimeFact.setRawValue((double)_flightTimer.elapsed() / 1000.0);
-}
-
-void Vehicle::_firstMissionLoadComplete()
-{
-    disconnect(_missionManager, &MissionManager::newMissionItemsAvailable, this, &Vehicle::_firstMissionLoadComplete);
-    _initialConnectStateMachine->advance();
-}
-
-void Vehicle::_firstGeoFenceLoadComplete()
-{
-    disconnect(_geoFenceManager, &GeoFenceManager::loadComplete, this, &Vehicle::_firstGeoFenceLoadComplete);
-    _initialConnectStateMachine->advance();
-}
-
-void Vehicle::_firstRallyPointLoadComplete()
-{
-    disconnect(_rallyPointManager, &RallyPointManager::loadComplete, this, &Vehicle::_firstRallyPointLoadComplete);
-    _initialPlanRequestComplete = true;
-    emit initialPlanRequestCompleteChanged(true);
-    _initialConnectStateMachine->advance();
 }
 
 void Vehicle::_parametersReady(bool parametersReady)
@@ -3426,8 +3375,8 @@ void Vehicle::_updateDistanceHeadingToHome()
 
 void Vehicle::_updateHeadingToNextWP()
 {
-    const int currentIndex = _missionManager->currentIndex();
-    QList<MissionItem*> llist = _missionManager->missionItems();
+    const int currentIndex = _planMasterController->missionManager()->currentIndex();
+    QList<MissionItem*> llist = _planMasterController->missionManager()->missionItems();
 
     if(llist.size()>currentIndex && currentIndex!=-1
             && llist[currentIndex]->coordinate().longitude()!=0.0
@@ -3442,7 +3391,7 @@ void Vehicle::_updateHeadingToNextWP()
 
 void Vehicle::_updateMissionItemIndex()
 {
-    const int currentIndex = _missionManager->currentIndex();
+    const int currentIndex = _planMasterController->missionManager()->currentIndex();
 
     unsigned offset = 0;
     if (!_firmwarePlugin->sendHomePositionToVehicle()) {
@@ -3471,11 +3420,6 @@ void Vehicle::forceInitialPlanRequestComplete()
 {
     _initialPlanRequestComplete = true;
     emit initialPlanRequestCompleteChanged(true);
-}
-
-void Vehicle::sendPlan(QString planFile)
-{
-    PlanMasterController::sendPlanToVehicle(this, planFile);
 }
 
 QString Vehicle::hobbsMeter()

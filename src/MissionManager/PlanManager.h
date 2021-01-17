@@ -30,11 +30,11 @@ class PlanManager : public QObject
     Q_OBJECT
 
 public:
-    PlanManager(Vehicle* vehicle, MAV_MISSION_TYPE planType);
+    PlanManager(Vehicle* vehicle, MAV_MISSION_TYPE planType, QObject* parent);
     ~PlanManager();
 
     bool inProgress(void) const;
-    const QList<MissionItem*>& missionItems(void) { return _missionItems; }
+    const QList<MissionItem*>& missionItems(void) { return _missionItemsOnVehicle; }
 
     /// Current mission item as reported by MISSION_CURRENT
     int currentIndex(void) const { return _currentMissionIndex; }
@@ -55,6 +55,8 @@ public:
     /// Removes all mission items from vehicle
     ///     Signals removeAllComplete when done
     void removeAll(void);
+
+    Vehicle* vehicle(void) { return _vehicle; }
 
     /// Error codes returned in error signal
     typedef enum {
@@ -77,14 +79,16 @@ public:
     static const int _maxRetryCount = 5;
 
 signals:
-    void newMissionItemsAvailable   (bool removeAllRequested);
     void inProgressChanged          (bool inProgress);
-    void error                      (int errorCode, const QString& errorMsg);
     void currentIndexChanged        (int currentIndex);
     void lastCurrentIndexChanged    (int lastCurrentIndex);
     void progressPct                (double progressPercentPct);
-    void removeAllComplete          (bool error);
-    void sendComplete               (bool error);
+    void _sendComplete              (bool error);                   ///< Sent internally by PlanManager code
+    void _loadComplete              (bool error);                   ///< Sent internally by PlanManager code
+    void _removeAllComplete         (bool error);                   ///< Sent internally by PlanManager code
+    void sendComplete               (bool error);                   ///< Only sent by derived classed
+    void loadComplete               (bool error);                   ///< Only sent by derived classed
+    void removeAllComplete          (bool error);                   ///< Only sent by derived classed
     void resumeMissionReady         (void);
     void resumeMissionUploadFail    (void);
 
@@ -118,22 +122,22 @@ protected:
     void _handleMissionAck(const mavlink_message_t& message);
     void _requestNextMissionItem(void);
     void _clearMissionItems(void);
-    void _sendError(ErrorCode_t errorCode, const QString& errorMsg);
     QString _ackTypeToString(AckType_t ackType);
     QString _missionResultToString(MAV_MISSION_RESULT result);
     void _finishTransaction(bool success, bool apmGuidedItemWrite = false);
     void _requestList(void);
     void _writeMissionCount(void);
     void _writeMissionItemsWorker(void);
-    void _clearAndDeleteMissionItems(void);
-    void _clearAndDeleteWriteMissionItems(void);
+    void _clearAndDeleteMissionItemsOnVehicle(void);
+    void _clearAndDeleteMissionItemsToSend(void);
     QString _lastMissionReqestString(MAV_MISSION_RESULT result);
     void _removeAllWorker(void);
     void _connectToMavlink(void);
     void _disconnectFromMavlink(void);
-    QString _planTypeString(void);
+    QString _planTypeToString(void);
+    void _writeMissionItems(const QList<MissionItem*>& missionItems);
+    void _displayError(ErrorCode_t errorCode, const QString& errorString);
 
-protected:
     Vehicle*            _vehicle =              nullptr;
     MissionCommandTree* _missionCommandTree =   nullptr;
     MAV_MISSION_TYPE    _planType;
@@ -144,13 +148,13 @@ protected:
 
     TransactionType_t   _transactionInProgress;
     bool                _resumeMission;
-    QList<int>          _itemIndicesToWrite;    ///< List of mission items which still need to be written to vehicle
-    QList<int>          _itemIndicesToRead;     ///< List of mission items which still need to be requested from vehicle
-    int                 _lastMissionRequest;    ///< Index of item last requested by MISSION_REQUEST
-    int                 _missionItemCountToRead;///< Count of all mission items to read
+    QList<int>          _itemIndicesToWrite;        ///< List of mission items which still need to be written to vehicle
+    QList<int>          _itemIndicesToRead;         ///< List of mission items which still need to be requested from vehicle
+    int                 _lastMissionRequest;        ///< Index of item last requested by MISSION_REQUEST
+    int                 _missionItemCountToRead;    ///< Count of all mission items to read
 
-    QList<MissionItem*> _missionItems;          ///< Set of mission items on vehicle
-    QList<MissionItem*> _writeMissionItems;     ///< Set of mission items currently being written to vehicle
+    QList<MissionItem*> _missionItemsOnVehicle;
+    QList<MissionItem*> _missionItemsToSend;
     int                 _currentMissionIndex;
     int                 _lastCurrentIndex;
 

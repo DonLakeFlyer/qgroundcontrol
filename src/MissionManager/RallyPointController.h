@@ -7,8 +7,7 @@
  *
  ****************************************************************************/
 
-#ifndef RallyPointController_H
-#define RallyPointController_H
+#pragma once
 
 #include "PlanElementController.h"
 #include "RallyPointManager.h"
@@ -19,14 +18,14 @@
 
 Q_DECLARE_LOGGING_CATEGORY(RallyPointControllerLog)
 
-class GeoFenceManager;
+class RallyPointManager;
 
 class RallyPointController : public PlanElementController
 {
     Q_OBJECT
     
 public:
-    RallyPointController(PlanMasterController* masterController, QObject* parent = nullptr);
+    RallyPointController(RallyPointManager* rallyPointManager, QObject* parent);
     ~RallyPointController();
     
     Q_PROPERTY(QmlObjectListModel*  points                  READ points                                             CONSTANT)
@@ -36,10 +35,9 @@ public:
     Q_INVOKABLE void addPoint       (QGeoCoordinate point);
     Q_INVOKABLE void removePoint    (QObject* rallyPoint);
 
-    void start                      (bool flyView) final;
     bool supported                  (void) const final;
-    void save                       (QJsonObject& json) final;
-    bool load                       (const QJsonObject& json, QString& errorString) final;
+    void saveToJson                 (QJsonObject& json) final;
+    bool loadFromJson               (const QJsonObject& json, QString& errorString) final;
     void loadFromVehicle            (void) final;
     void sendToVehicle              (void) final;
     void removeAll                  (void) final;
@@ -48,7 +46,8 @@ public:
     bool dirty                      (void) const final { return _dirty; }
     void setDirty                   (bool dirty) final;
     bool containsItems              (void) const final;
-    bool showPlanFromManagerVehicle (void) final;
+
+    QList<QGeoCoordinate> getRallyPoints(void);
 
     QmlObjectListModel* points                  (void) { return &_points; }
     QString             editorQml               (void) const;
@@ -59,27 +58,19 @@ public:
 
 signals:
     void currentRallyPointChanged(QObject* rallyPoint);
-    void loadComplete(void);
 
 private slots:
-    void _managerLoadComplete       (void);
-    void _managerSendComplete       (bool error);
-    void _managerRemoveAllComplete  (bool error);
-    void _setFirstPointCurrent      (void);
-    void _updateContainsItems       (void);
-    void _managerVehicleChanged     (Vehicle* managerVehicle);
+    void _managerLoadComplete   (bool error);
+    void _setFirstPointCurrent  (void);
+    void _updateContainsItems   (void);
 
 private:
-    Vehicle*            _managerVehicle =       nullptr;
-    RallyPointManager*  _rallyPointManager =    nullptr;
-    bool                _dirty =                false;
+    RallyPointManager*  _rallyPointManager  = nullptr;
+    bool                _dirty              = false;
     QmlObjectListModel  _points;
-    QObject*            _currentRallyPoint =    nullptr;
-    bool                _itemsRequested =       false;
+    QObject*            _currentRallyPoint  = nullptr;
 
     static const int    _jsonCurrentVersion = 2;
     static const char*  _jsonFileTypeValue;
     static const char*  _jsonPointsKey;
 };
-
-#endif

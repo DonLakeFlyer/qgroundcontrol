@@ -7,8 +7,7 @@
  *
  ****************************************************************************/
 
-#ifndef GeoFenceController_H
-#define GeoFenceController_H
+#pragma once
 
 #include "PlanElementController.h"
 #include "GeoFenceManager.h"
@@ -27,7 +26,7 @@ class GeoFenceController : public PlanElementController
     Q_OBJECT
     
 public:
-    GeoFenceController(PlanMasterController* masterController, QObject* parent = nullptr);
+    GeoFenceController(GeoFenceManager* geoFenceManager, QObject* parent);
     ~GeoFenceController();
 
     Q_PROPERTY(QmlObjectListModel*  polygons                READ polygons                                           CONSTANT)
@@ -64,9 +63,8 @@ public:
 
     // Overrides from PlanElementController
     bool supported                  (void) const final;
-    void start                      (bool flyView) final;
-    void save                       (QJsonObject& json) final;
-    bool load                       (const QJsonObject& json, QString& errorString) final;
+    void saveToJson                 (QJsonObject& json) final;
+    bool loadFromJson               (const QJsonObject& json, QString& errorString) final;
     void loadFromVehicle            (void) final;
     void sendToVehicle              (void) final;
     void removeAll                  (void) final;
@@ -75,7 +73,6 @@ public:
     bool dirty                      (void) const final;
     void setDirty                   (bool dirty) final;
     bool containsItems              (void) const final;
-    bool showPlanFromManagerVehicle (void) final;
 
     QmlObjectListModel* polygons                (void) { return &_polygons; }
     QmlObjectListModel* circles                 (void) { return &_circles; }
@@ -87,25 +84,16 @@ public:
 signals:
     void breachReturnPointChanged       (QGeoCoordinate breachReturnPoint);
     void editorQmlChanged               (QString editorQml);
-    void loadComplete                   (void);
     void paramCircularFenceChanged      (void);
 
 private slots:
     void _polygonDirtyChanged       (bool dirty);
     void _setDirty                  (void);
-    void _setFenceFromManager       (const QList<QGCFencePolygon>& polygons, const QList<QGCFenceCircle>&  circles);
-    void _setReturnPointFromManager (QGeoCoordinate breachReturnPoint);
-    void _managerLoadComplete       (void);
     void _updateContainsItems       (void);
-    void _managerSendComplete       (bool error);
-    void _managerRemoveAllComplete  (bool error);
     void _parametersReady           (void);
-    void _managerVehicleChanged      (Vehicle* managerVehicle);
+    void _managerLoadComplete       (bool error);
 
 private:
-    void _init(void);
-
-    Vehicle*            _managerVehicle =               nullptr;
     GeoFenceManager*    _geoFenceManager =              nullptr;
     bool                _dirty =                        false;
     QmlObjectListModel  _polygons;
@@ -113,7 +101,6 @@ private:
     QGeoCoordinate      _breachReturnPoint;
     Fact                _breachReturnAltitudeFact;
     double              _breachReturnDefaultAltitude =  qQNaN();
-    bool                _itemsRequested =               false;
     Fact*               _px4ParamCircularFenceFact =    nullptr;
 
     static QMap<QString, FactMetaData*> _metaDataMap;
@@ -129,5 +116,3 @@ private:
 
     static const char* _breachReturnAltitudeFactName;
 };
-
-#endif

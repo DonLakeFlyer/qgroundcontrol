@@ -44,8 +44,7 @@ void CameraSectionTest::init(void)
     SectionTest::_createSpy(_cameraSection, &_spySection);
     QVERIFY(_spySection);
 
-    _validGimbalItem = new SimpleMissionItem(_masterController,
-                                             false, // flyView
+    _validGimbalItem = new SimpleMissionItem(_offlineVehicle(),
                                              MissionItem(0,
                                                          MAV_CMD_DO_MOUNT_CONTROL,
                                                          MAV_FRAME_MISSION,
@@ -54,8 +53,7 @@ void CameraSectionTest::init(void)
                                                          MAV_MOUNT_MODE_MAVLINK_TARGETING,  // control gimbal with pitch, roll, yaw settings
                                                          true, false),
                                              this);
-    _validTimeItem = new SimpleMissionItem(_masterController,
-                                           false, // flyView
+    _validTimeItem = new SimpleMissionItem(_offlineVehicle(),
                                            MissionItem(0,
                                                        MAV_CMD_IMAGE_START_CAPTURE,
                                                        MAV_FRAME_MISSION,
@@ -65,8 +63,7 @@ void CameraSectionTest::init(void)
                                                        NAN, NAN, NAN, NAN,          // Reserved
                                                        true, false),
                                            this);
-    _validDistanceItem = new SimpleMissionItem(_masterController,
-                                               false, // flyView
+    _validDistanceItem = new SimpleMissionItem(_offlineVehicle(),
                                                MissionItem(0,
                                                            MAV_CMD_DO_SET_CAM_TRIGG_DIST,
                                                            MAV_FRAME_MISSION,
@@ -76,8 +73,7 @@ void CameraSectionTest::init(void)
                                                            0, 0, 0, 0,
                                                            true, false),
                                                this);
-    _validStartVideoItem = new SimpleMissionItem(_masterController,
-                                                 false, // flyView
+    _validStartVideoItem = new SimpleMissionItem(_offlineVehicle(),
                                                  MissionItem(0,                             // sequence number
                                                              MAV_CMD_VIDEO_START_CAPTURE,
                                                              MAV_FRAME_MISSION,
@@ -87,8 +83,7 @@ void CameraSectionTest::init(void)
                                                              true,                          // autocontinue
                                                              false),                        // isCurrentItem
                                                  this);
-    _validCameraPhotoModeItem = new SimpleMissionItem(_masterController,
-                                                      false, // flyView
+    _validCameraPhotoModeItem = new SimpleMissionItem(_offlineVehicle(),
                                                       MissionItem(0,                               // sequence number
                                                                   MAV_CMD_SET_CAMERA_MODE,
                                                                   MAV_FRAME_MISSION,
@@ -98,8 +93,7 @@ void CameraSectionTest::init(void)
                                                                   true,                            // autocontinue
                                                                   false),                          // isCurrentItem
                                                       this);
-    _validCameraVideoModeItem = new SimpleMissionItem(_masterController,
-                                                      false, // flyView
+    _validCameraVideoModeItem = new SimpleMissionItem(_offlineVehicle(),
                                                       MissionItem(0,                               // sequence number
                                                                   MAV_CMD_SET_CAMERA_MODE,
                                                                   MAV_FRAME_MISSION,
@@ -109,8 +103,7 @@ void CameraSectionTest::init(void)
                                                                   true,                            // autocontinue
                                                                   false),                          // isCurrentItem
                                                       this);
-    _validCameraSurveyPhotoModeItem = new SimpleMissionItem(_masterController,
-                                                            false, // flyView
+    _validCameraSurveyPhotoModeItem = new SimpleMissionItem(_offlineVehicle(),
                                                             MissionItem(0,                          // sequence number
                                                                         MAV_CMD_SET_CAMERA_MODE,
                                                                         MAV_FRAME_MISSION,
@@ -120,8 +113,7 @@ void CameraSectionTest::init(void)
                                                                         true,                       // autocontinue
                                                                         false),                     // isCurrentItem
                                                             this);
-    _validTakePhotoItem = new SimpleMissionItem(_masterController,
-                                                false, // flyView
+    _validTakePhotoItem = new SimpleMissionItem(_offlineVehicle(),
                                                 MissionItem(0,
                                                             MAV_CMD_IMAGE_START_CAPTURE,
                                                             MAV_FRAME_MISSION,
@@ -134,9 +126,9 @@ void CameraSectionTest::init(void)
                                                             false),                         // isCurrentItem
                                                 this);
 
-    _validStopVideoItem =       createValidStopVideoItem(_masterController, this);
-    _validStopDistanceItem =    createValidStopDistanceItem(_masterController, this);
-    _validStopTimeItem =        createValidStopTimeItem(_masterController, this);
+    _validStopVideoItem     = createValidStopVideoItem(this);
+    _validStopDistanceItem  = createValidStopDistanceItem(this);
+    _validStopTimeItem      = createValidStopTimeItem(this);
 }
 
 void CameraSectionTest::cleanup(void)
@@ -367,7 +359,7 @@ void CameraSectionTest::_checkAvailable(void)
                             70.1234567,
                             true,           // autoContinue
                             false);         // isCurrentItem
-    SimpleMissionItem* item = new SimpleMissionItem(_masterController, false /* flyView */, missionItem, this);
+    SimpleMissionItem* item = new SimpleMissionItem(_offlineVehicle(), missionItem, this);
     QVERIFY(item->cameraSection());
     QCOMPARE(item->cameraSection()->available(), false);
 }
@@ -607,7 +599,7 @@ void CameraSectionTest::_testScanForGimbalSection(void)
 
     // Check for a scan success
 
-    SimpleMissionItem* newValidGimbalItem = new SimpleMissionItem(_masterController, false /* flyView */, false /* forLoad */, this);
+    SimpleMissionItem* newValidGimbalItem = new SimpleMissionItem(_offlineVehicle(), false /* forLoad */, this);
     newValidGimbalItem->missionItem() = _validGimbalItem->missionItem();
     visualItems.append(newValidGimbalItem);
     scanIndex = 0;
@@ -634,7 +626,7 @@ void CameraSectionTest::_testScanForGimbalSection(void)
 
     // Gimbal command but incorrect settings
 
-    SimpleMissionItem invalidSimpleItem(_masterController, false /* flyView */, _validGimbalItem->missionItem(), nullptr);
+    SimpleMissionItem invalidSimpleItem(_offlineVehicle(), _validGimbalItem->missionItem(), nullptr);
     invalidSimpleItem.missionItem().setParam2(10);    // roll is not supported, should be 0
     visualItems.append(&invalidSimpleItem);
     QCOMPARE(_cameraSection->scanForSection(&visualItems, scanIndex), false);
@@ -691,7 +683,7 @@ void CameraSectionTest::_testScanForCameraModeSection(void)
 
     // Check for a scan success
 
-    SimpleMissionItem* newValidCameraModeItem = new SimpleMissionItem(_masterController, false /* flyView */, false /* forLoad */, this);
+    SimpleMissionItem* newValidCameraModeItem = new SimpleMissionItem(_offlineVehicle(), false /* forLoad */, this);
     newValidCameraModeItem->missionItem() = _validCameraPhotoModeItem->missionItem();
     visualItems.append(newValidCameraModeItem);
     scanIndex = 0;
@@ -725,7 +717,7 @@ void CameraSectionTest::_testScanForCameraModeSection(void)
 
     // Mode command but incorrect settings
 
-    SimpleMissionItem invalidSimpleItem(_masterController, false /* flyView */, _validCameraPhotoModeItem->missionItem(), nullptr);
+    SimpleMissionItem invalidSimpleItem(_offlineVehicle(), _validCameraPhotoModeItem->missionItem(), nullptr);
     std::function<void(MissionItem&, double)> rgSetParamFns[] = {
             &MissionItem::setParam1,
             &MissionItem::setParam2,
@@ -763,7 +755,7 @@ void CameraSectionTest::_testScanForPhotoIntervalTimeSection(void)
     Mission Param #3	Number of images to capture total - 0 for unlimited capture
 */
 
-    SimpleMissionItem* newValidTimeItem = new SimpleMissionItem(_masterController, false /* flyView */, false /* forLoad */, this);
+    SimpleMissionItem* newValidTimeItem = new SimpleMissionItem(_offlineVehicle(), false /* forLoad */, this);
     newValidTimeItem->missionItem() = _validTimeItem->missionItem();
     visualItems.append(newValidTimeItem);
     QCOMPARE(_cameraSection->scanForSection(&visualItems, scanIndex), true);
@@ -776,7 +768,7 @@ void CameraSectionTest::_testScanForPhotoIntervalTimeSection(void)
 
     // Image start command but incorrect settings
 
-    SimpleMissionItem invalidSimpleItem(_masterController, false /* flyView */, _validTimeItem->missionItem(), nullptr);
+    SimpleMissionItem invalidSimpleItem(_offlineVehicle(), _validTimeItem->missionItem(), nullptr);
     invalidSimpleItem.missionItem().setParam3(10);    // must be 0 for unlimited
     visualItems.append(&invalidSimpleItem);
     QCOMPARE(_cameraSection->scanForSection(&visualItems, scanIndex), false);
@@ -804,7 +796,7 @@ void CameraSectionTest::_testScanForPhotoIntervalDistanceSection(void)
     Mission Param #7	Empty
     */
 
-    SimpleMissionItem* newValidDistanceItem = new SimpleMissionItem(_masterController, false /* flyView */, false /* forLoad */, this);
+    SimpleMissionItem* newValidDistanceItem = new SimpleMissionItem(_offlineVehicle(), false /* forLoad */, this);
     newValidDistanceItem->missionItem() = _validDistanceItem->missionItem();
     visualItems.append(newValidDistanceItem);
     QCOMPARE(_cameraSection->scanForSection(&visualItems, scanIndex), true);
@@ -817,7 +809,7 @@ void CameraSectionTest::_testScanForPhotoIntervalDistanceSection(void)
 
     // Trigger distance command but incorrect settings
 
-    SimpleMissionItem invalidSimpleItem(_masterController, false /* flyView */, _validDistanceItem->missionItem(), nullptr);
+    SimpleMissionItem invalidSimpleItem(_offlineVehicle(), _validDistanceItem->missionItem(), nullptr);
     invalidSimpleItem.missionItem().setParam1(-1);    // must be >= 0
     visualItems.append(&invalidSimpleItem);
     QCOMPARE(_cameraSection->scanForSection(&visualItems, scanIndex), false);
@@ -890,7 +882,7 @@ void CameraSectionTest::_testScanForStartVideoSection(void)
     Mission Param #3	Reserved
     */
 
-    SimpleMissionItem* newValidStartVideoItem = new SimpleMissionItem(_masterController, false /* flyView */, false /* forLoad */, this);
+    SimpleMissionItem* newValidStartVideoItem = new SimpleMissionItem(_offlineVehicle(), false /* forLoad */, this);
     newValidStartVideoItem->missionItem() = _validStartVideoItem->missionItem();
     visualItems.append(newValidStartVideoItem);
     QCOMPARE(_cameraSection->scanForSection(&visualItems, scanIndex), true);
@@ -902,7 +894,7 @@ void CameraSectionTest::_testScanForStartVideoSection(void)
 
     // Start Video command but incorrect settings
 
-    SimpleMissionItem invalidSimpleItem(_masterController, false /* flyView */, _validStartVideoItem->missionItem(), nullptr);
+    SimpleMissionItem invalidSimpleItem(_offlineVehicle(), _validStartVideoItem->missionItem(), nullptr);
     invalidSimpleItem.missionItem().setParam1(10);    // Reserved (must be 0)
     visualItems.append(&invalidSimpleItem);
     QCOMPARE(_cameraSection->scanForSection(&visualItems, scanIndex), false);
@@ -926,7 +918,7 @@ void CameraSectionTest::_testScanForStopVideoSection(void)
     Mission Param #1 Reserved (Set to 0)
     */
 
-    SimpleMissionItem* newValidStopVideoItem = new SimpleMissionItem(_masterController, false /* flyView */, false /* forLoad */, this);
+    SimpleMissionItem* newValidStopVideoItem = new SimpleMissionItem(_offlineVehicle(), false /* forLoad */, this);
     newValidStopVideoItem->missionItem() = _validStopVideoItem->missionItem();
     visualItems.append(newValidStopVideoItem);
     QCOMPARE(_cameraSection->scanForSection(&visualItems, scanIndex), true);
@@ -938,7 +930,7 @@ void CameraSectionTest::_testScanForStopVideoSection(void)
 
     // Trigger distance command but incorrect settings
 
-    SimpleMissionItem invalidSimpleItem(_masterController, false /* flyView */, _validStopVideoItem->missionItem(), nullptr);
+    SimpleMissionItem invalidSimpleItem(_offlineVehicle(), _validStopVideoItem->missionItem(), nullptr);
     invalidSimpleItem.missionItem().setParam1(10);    // must be  0
     visualItems.append(&invalidSimpleItem);
     QCOMPARE(_cameraSection->scanForSection(&visualItems, scanIndex), false);
@@ -964,8 +956,8 @@ void CameraSectionTest::_testScanForStopPhotoSection(void)
 
     _commonScanTest(_cameraSection);
 
-    SimpleMissionItem* newValidStopDistanceItem = new SimpleMissionItem(_masterController, false /* flyView */, false /* forLoad */, this);
-    SimpleMissionItem* newValidStopTimeItem = new SimpleMissionItem(_masterController, false /* flyView */, false /* forLoad */, this);
+    SimpleMissionItem* newValidStopDistanceItem = new SimpleMissionItem(_offlineVehicle(), false /* forLoad */, this);
+    SimpleMissionItem* newValidStopTimeItem = new SimpleMissionItem(_offlineVehicle(), false /* forLoad */, this);
     newValidStopDistanceItem->missionItem() = _validStopDistanceItem->missionItem();
     newValidStopTimeItem->missionItem() = _validStopTimeItem->missionItem();
     visualItems.append(newValidStopDistanceItem);
@@ -978,8 +970,8 @@ void CameraSectionTest::_testScanForStopPhotoSection(void)
 
     // Out of order commands
 
-    SimpleMissionItem validStopDistanceItem(_masterController, false /* flyView */, false /* forLoad */, nullptr);
-    SimpleMissionItem validStopTimeItem(_masterController, false /* flyView */, false /* forLoad */, nullptr);
+    SimpleMissionItem validStopDistanceItem(_offlineVehicle(), false /* forLoad */, nullptr);
+    SimpleMissionItem validStopTimeItem(_offlineVehicle(), false /* forLoad */, nullptr);
     validStopDistanceItem.missionItem() = _validStopDistanceItem->missionItem();
     validStopTimeItem.missionItem() = _validStopTimeItem->missionItem();
     visualItems.append(&validStopTimeItem);
@@ -1007,7 +999,7 @@ void CameraSectionTest::_testScanForTakePhotoSection(void)
     Mission Param #4	0 Unused sequence id
     */
 
-    SimpleMissionItem* newValidTakePhotoItem = new SimpleMissionItem(_masterController, false /* flyView */, false /* forLoad */, this);
+    SimpleMissionItem* newValidTakePhotoItem = new SimpleMissionItem(_offlineVehicle(), false /* forLoad */, this);
     newValidTakePhotoItem->missionItem() = _validTakePhotoItem->missionItem();
     visualItems.append(newValidTakePhotoItem);
     QCOMPARE(_cameraSection->scanForSection(&visualItems, scanIndex), true);
@@ -1019,7 +1011,7 @@ void CameraSectionTest::_testScanForTakePhotoSection(void)
 
     // Take Photo command but incorrect settings
 
-    SimpleMissionItem invalidSimpleItem(_masterController, false /* flyView */, _validTimeItem->missionItem(), nullptr);
+    SimpleMissionItem invalidSimpleItem(_offlineVehicle(), _validTimeItem->missionItem(), nullptr);
     invalidSimpleItem.missionItem().setParam3(10);    // must be 1 for single photo
     visualItems.append(&invalidSimpleItem);
     QCOMPARE(_cameraSection->scanForSection(&visualItems, scanIndex), false);
@@ -1079,9 +1071,9 @@ void CameraSectionTest::_testScanForMultipleItems(void)
     // Camera action followed by gimbal/mode
     for (SimpleMissionItem* actionItem: rgActionItems) {
         for (SimpleMissionItem* cameraItem: rgCameraItems) {
-            SimpleMissionItem* item1 = new SimpleMissionItem(_masterController, false /* flyView */, false /* forLoad */, this);
+            SimpleMissionItem* item1 = new SimpleMissionItem(_offlineVehicle(), false /* forLoad */, this);
             item1->missionItem() = actionItem->missionItem();
-            SimpleMissionItem* item2 = new SimpleMissionItem(_masterController, false /* flyView */, false /* forLoad */, this);
+            SimpleMissionItem* item2 = new SimpleMissionItem(_offlineVehicle(), false /* forLoad */, this);
             item2->missionItem() = cameraItem->missionItem();
             visualItems.append(item1);
             visualItems.append(item2);
@@ -1100,13 +1092,13 @@ void CameraSectionTest::_testScanForMultipleItems(void)
     // Gimbal/Mode followed by camera action
     for (SimpleMissionItem* actionItem: rgCameraItems) {
         for (SimpleMissionItem* cameraItem: rgActionItems) {
-            SimpleMissionItem* item1 = new SimpleMissionItem(_masterController, false /* flyView */, false /* forLoad */, this);
+            SimpleMissionItem* item1 = new SimpleMissionItem(_offlineVehicle(), false /* forLoad */, this);
             item1->missionItem() = actionItem->missionItem();
-            SimpleMissionItem* item2 = new SimpleMissionItem(_masterController, false /* flyView */, false /* forLoad */, this);
+            SimpleMissionItem* item2 = new SimpleMissionItem(_offlineVehicle(), false /* forLoad */, this);
             item2->missionItem() = cameraItem->missionItem();
             visualItems.append(item1);
             visualItems.append(item2);
-            qDebug() << commandTree->getUIInfo(_controllerVehicle, QGCMAVLink::VehicleClassGeneric, (MAV_CMD)item1->command())->rawName() << commandTree->getUIInfo(_controllerVehicle, QGCMAVLink::VehicleClassGeneric, (MAV_CMD)item2->command())->rawName();;
+            qDebug() << commandTree->getUIInfo(_offlineVehicle(), QGCMAVLink::VehicleClassGeneric, (MAV_CMD)item1->command())->rawName() << commandTree->getUIInfo(_offlineVehicle(), QGCMAVLink::VehicleClassGeneric, (MAV_CMD)item2->command())->rawName();;
 
             scanIndex = 0;
             QCOMPARE(_cameraSection->scanForSection(&visualItems, scanIndex), true);
@@ -1139,49 +1131,46 @@ void CameraSectionTest::_testSpecifiedGimbalValuesChanged(void)
     QVERIFY(_spyCamera->checkSignalByMask(specifiedGimbalPitchChangedMask));
 }
 
-SimpleMissionItem* CameraSectionTest::createValidStopVideoItem(PlanMasterController* masterController, QObject* parent)
+SimpleMissionItem* CameraSectionTest::createValidStopVideoItem(QObject* parent)
 {
-    return new SimpleMissionItem(masterController,
-                                 false, // flyView
+    return new SimpleMissionItem(_offlineVehicle(),
                                  MissionItem(0, MAV_CMD_VIDEO_STOP_CAPTURE, MAV_FRAME_MISSION, 0, qQNaN(), qQNaN(), qQNaN(), qQNaN(), qQNaN(), qQNaN(), true, false),
                                  parent);
 }
 
 
-SimpleMissionItem* CameraSectionTest::createValidStopDistanceItem(PlanMasterController* masterController, QObject* parent)
+SimpleMissionItem* CameraSectionTest::createValidStopDistanceItem(QObject* parent)
 {
-    return new SimpleMissionItem(masterController,
-                                 false, // flyView
+    return new SimpleMissionItem(_offlineVehicle(),
                                  MissionItem(0, MAV_CMD_DO_SET_CAM_TRIGG_DIST, MAV_FRAME_MISSION, 0, 0, 0, 0, 0, 0, 0, true, false),
                                  parent);
 }
 
-SimpleMissionItem* CameraSectionTest::createValidStopTimeItem(PlanMasterController* masterController, QObject* parent)
+SimpleMissionItem* CameraSectionTest::createValidStopTimeItem(QObject* parent)
 {
-    return new SimpleMissionItem(masterController,
-                                 false, // flyView
+    return new SimpleMissionItem(_offlineVehicle(),
                                  MissionItem(1, MAV_CMD_IMAGE_STOP_CAPTURE, MAV_FRAME_MISSION, 0, qQNaN(), qQNaN(), qQNaN(), qQNaN(), qQNaN(), qQNaN(), true, false),
                                  parent);
 }
 
-SimpleMissionItem* CameraSectionTest::createInvalidStopVideoItem(PlanMasterController* masterController, QObject* parent)
+SimpleMissionItem* CameraSectionTest::createInvalidStopVideoItem(QObject* parent)
 {
-    SimpleMissionItem* invalidSimpleItem = createValidStopVideoItem(masterController, parent);
+    SimpleMissionItem* invalidSimpleItem = createValidStopVideoItem(parent);
     invalidSimpleItem->missionItem().setParam1(10);    // must be  0 to be valid for scan
     return invalidSimpleItem;
 }
 
 
-SimpleMissionItem* CameraSectionTest::createInvalidStopDistanceItem(PlanMasterController* masterController, QObject* parent)
+SimpleMissionItem* CameraSectionTest::createInvalidStopDistanceItem(QObject* parent)
 {
-    SimpleMissionItem* invalidSimpleItem = createValidStopDistanceItem(masterController, parent);
+    SimpleMissionItem* invalidSimpleItem = createValidStopDistanceItem(parent);
     invalidSimpleItem->missionItem().setParam2(-1);    // Should be 0
     return invalidSimpleItem;
 }
 
-SimpleMissionItem* CameraSectionTest::createInvalidStopTimeItem(PlanMasterController* masterController, QObject* parent)
+SimpleMissionItem* CameraSectionTest::createInvalidStopTimeItem(QObject* parent)
 {
-    SimpleMissionItem* invalidSimpleItem = createValidStopTimeItem(masterController, parent);
+    SimpleMissionItem* invalidSimpleItem = createValidStopTimeItem(parent);
     invalidSimpleItem->missionItem().setParam1(1);    // Should be 0
     return invalidSimpleItem;
 }

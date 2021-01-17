@@ -19,22 +19,20 @@
 
 Q_DECLARE_LOGGING_CATEGORY(MissionSettingsItemLog)
 
-class PlanMasterController;
+class Vehicle;
 
 class MissionSettingsItem : public ComplexMissionItem
 {
     Q_OBJECT
 
 public:
-    MissionSettingsItem(PlanMasterController* masterController, bool flyView, QObject* parent);
+    MissionSettingsItem(Vehicle* vehicle, QObject* parent);
 
-    Q_PROPERTY(Fact*    plannedHomePositionAltitude READ plannedHomePositionAltitude                            CONSTANT)
-    Q_PROPERTY(QObject* cameraSection               READ cameraSection                                          CONSTANT)
-    Q_PROPERTY(QObject* speedSection                READ speedSection                                           CONSTANT)
+    Q_PROPERTY(QObject* cameraSection   READ cameraSection CONSTANT)
+    Q_PROPERTY(QObject* speedSection    READ speedSection  CONSTANT)
 
-    Fact*           plannedHomePositionAltitude (void) { return &_plannedHomePositionAltitudeFact; }
-    CameraSection*  cameraSection               (void) { return &_cameraSection; }
-    SpeedSection*   speedSection                (void) { return &_speedSection; }
+    CameraSection*  cameraSection   (void) { return &_cameraSection; }
+    SpeedSection*   speedSection    (void) { return &_speedSection; }
 
     /// Scans the loaded items for settings items
     bool scanForMissionSettings(QmlObjectListModel* visualItems, int scanIndex);
@@ -45,15 +43,6 @@ public:
     ///     @param missionItemParent Parent for newly allocated MissionItems
     /// @return true: Mission end action was added
     bool addMissionEndAction(QList<MissionItem*>& items, int seqNum, QObject* missionItemParent);
-
-    /// Called to update home position coordinate when it comes from a connected vehicle
-    void setHomePositionFromVehicle(Vehicle* vehicle);
-
-    // Called to set the initial home position. Vehicle can still update home position after this.
-    void setInitialHomePosition(const QGeoCoordinate& coordinate);
-
-    // Called to set the initial home position specified by user. Vehicle will no longer affect home position.
-    void setInitialHomePositionFromUser(const QGeoCoordinate& coordinate);
 
     // Overrides from ComplexMissionItem
     QString patternName         (void) const final { return QString(); }
@@ -71,11 +60,11 @@ public:
     bool            isStandaloneCoordinate      (void) const final { return false; }
     bool            specifiesCoordinate         (void) const final;
     bool            specifiesAltitudeOnly       (void) const final { return false; }
-    QString         commandDescription          (void) const final { return "Mission Start"; }
-    QString         commandName                 (void) const final { return "Mission Start"; }
+    QString         commandDescription          (void) const final { return tr("Mission Start"); }
+    QString         commandName                 (void) const final { return tr("Mission Start"); }
     QString         abbreviation                (void) const final;
-    QGeoCoordinate  coordinate                  (void) const final { return _plannedHomePositionCoordinate; } // Includes altitude
-    QGeoCoordinate  exitCoordinate              (void) const final { return _plannedHomePositionCoordinate; }
+    QGeoCoordinate  coordinate                  (void) const final { return _vehicle->homePosition(); } // Includes altitude
+    QGeoCoordinate  exitCoordinate              (void) const final { return coordinate(); }
     int             sequenceNumber              (void) const final { return _sequenceNumber; }
     double          specifiedGimbalYaw          (void) final;
     double          specifiedGimbalPitch        (void) final;
@@ -85,10 +74,10 @@ public:
     double          additionalTimeDelay         (void) const final { return 0; }
     bool            exitCoordinateSameAsEntry   (void) const final { return true; }
     void            setDirty                    (bool dirty) final;
-    void            setCoordinate               (const QGeoCoordinate& coordinate) final;   // Should only be called if the end user is moving
+    void            setCoordinate               (const QGeoCoordinate& /*coordinate*/) final { qCWarning(MissionSettingsItemLog) << "Internal error: setCoordinate called"; }
     void            setSequenceNumber           (int sequenceNumber) final;
     void            save                        (QJsonArray&  missionItems) final;
-    double          amslEntryAlt                (void) const final { return _plannedHomePositionCoordinate.altitude(); }
+    double          amslEntryAlt                (void) const final { return _vehicle->homePosition().altitude(); }
     double          amslExitAlt                 (void) const final { return amslEntryAlt(); }
     double          minAMSLAltitude             (void) const final { return amslEntryAlt(); }
     double          maxAMSLAltitude             (void) const final { return amslEntryAlt(); }
@@ -100,18 +89,10 @@ private slots:
     void _setDirtyAndUpdateLastSequenceNumber   (void);
     void _setDirty                              (void);
     void _sectionDirtyChanged                   (bool dirty);
-    void _updateAltitudeInCoordinate            (QVariant value);
-    void _setHomeAltFromTerrain                 (double terrainAltitude);
-    void _setCoordinateWorker                   (const QGeoCoordinate& coordinate);
-    void _updateHomePosition                    (const QGeoCoordinate& homePosition);
 
 private:
-    Vehicle*        _managerVehicle =                   nullptr;
-    QGeoCoordinate  _plannedHomePositionCoordinate;     // Does not include altitude
-    Fact            _plannedHomePositionAltitudeFact;
-    int             _sequenceNumber =                   0;
-    bool            _plannedHomePositionFromVehicle =   false;
-    bool            _plannedHomePositionMovedByUser =   false;
+    Vehicle*        _vehicle        = nullptr;
+    int             _sequenceNumber = 0;
     CameraSection   _cameraSection;
     SpeedSection    _speedSection;
 

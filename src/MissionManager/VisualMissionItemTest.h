@@ -88,6 +88,5 @@ protected:
     static const size_t cVisualItemSignals = maxSignalIndex;
     const char*         rgVisualItemSignals[cVisualItemSignals];
 
-    PlanMasterController*   _masterController =     nullptr;
-    Vehicle*                _controllerVehicle =    nullptr;
+    PlanMasterController*   _masterController = nullptr;
 };

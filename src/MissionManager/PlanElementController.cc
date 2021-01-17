@@ -14,10 +14,9 @@
 #include "SettingsManager.h"
 #include "AppSettings.h"
 
-PlanElementController::PlanElementController(PlanMasterController* masterController, QObject* parent)
-    : QObject           (parent)
-    , _masterController (masterController)
-    , _flyView          (false)
+PlanElementController::PlanElementController(Vehicle* vehicle, QObject* parent)
+    : QObject   (parent)
+    , _vehicle  (vehicle)
 {
 
 }
@@ -25,9 +24,4 @@ PlanElementController::PlanElementController(PlanMasterController* masterControl
 PlanElementController::~PlanElementController()
 {
 
-}
-
-void PlanElementController::start(bool flyView)
-{
-    _flyView = flyView;
 }

@@ -21,14 +21,14 @@ class TakeoffMissionItem : public SimpleMissionItem
     Q_OBJECT
     
 public:
-    TakeoffMissionItem(PlanMasterController* masterController, bool flyView, MissionSettingsItem* settingsItem, bool forLoad, QObject* parent);
-    TakeoffMissionItem(MAV_CMD takeoffCmd, PlanMasterController* masterController, bool flyView, MissionSettingsItem* settingsItem, QObject* parent);
-    TakeoffMissionItem(const MissionItem& missionItem,  PlanMasterController* masterController, bool flyView, MissionSettingsItem* settingsItem, QObject* parent);
+    TakeoffMissionItem(Vehicle* vehicle, MissionSettingsItem* settingsItem, bool forLoad, QObject* parent);
+    TakeoffMissionItem(MAV_CMD takeoffCmd, Vehicle* vehicle, MissionSettingsItem* settingsItem, QObject* parent);
+    TakeoffMissionItem(const MissionItem& missionItem, Vehicle* vehicle, MissionSettingsItem* settingsItem, QObject* parent);
 
     Q_PROPERTY(QGeoCoordinate   launchCoordinate            READ launchCoordinate               WRITE setLaunchCoordinate               NOTIFY launchCoordinateChanged)
     Q_PROPERTY(bool             launchTakeoffAtSameLocation READ launchTakeoffAtSameLocation    WRITE setLaunchTakeoffAtSameLocation    NOTIFY launchTakeoffAtSameLocationChanged)
 
-    QGeoCoordinate  launchCoordinate            (void) const { return _settingsItem->coordinate(); }
+    QGeoCoordinate  launchCoordinate            (void) const { return _vehicle->homePosition(); }
     bool            launchTakeoffAtSameLocation (void) const { return _launchTakeoffAtSameLocation; }
 
     void setLaunchCoordinate            (const QGeoCoordinate& launchCoordinate);

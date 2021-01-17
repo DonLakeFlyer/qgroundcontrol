@@ -42,11 +42,11 @@ const char* TransectStyleComplexItem::_jsonTerrainFollowKey =               "Fol
 const char* TransectStyleComplexItem::_jsonTerrainFlightSpeed =             "TerrainFlightSpeed";
 const char* TransectStyleComplexItem::_jsonCameraShotsKey =                 "CameraShots";
 
-TransectStyleComplexItem::TransectStyleComplexItem(PlanMasterController* masterController, bool flyView, QString settingsGroup, QObject* parent)
-    : ComplexMissionItem                (masterController, flyView, parent)
-    , _cameraCalc                       (masterController, settingsGroup)
+TransectStyleComplexItem::TransectStyleComplexItem(Vehicle* vehicle, QString settingsGroup, QObject* parent)
+    : ComplexMissionItem                (vehicle, parent)
+    , _cameraCalc                       (vehicle, settingsGroup)
     , _metaDataMap                      (FactMetaData::createMapFromJsonFile(QStringLiteral(":/json/TransectStyle.SettingsGroup.json"), this))
-    , _turnAroundDistanceFact           (settingsGroup, _metaDataMap[_controllerVehicle->multiRotor() ? turnAroundDistanceMultiRotorName : turnAroundDistanceName])
+    , _turnAroundDistanceFact           (settingsGroup, _metaDataMap[_vehicle->multiRotor() ? turnAroundDistanceMultiRotorName : turnAroundDistanceName])
     , _cameraTriggerInTurnAroundFact    (settingsGroup, _metaDataMap[cameraTriggerInTurnAroundName])
     , _hoverAndCaptureFact              (settingsGroup, _metaDataMap[hoverAndCaptureName])
     , _refly90DegreesFact               (settingsGroup, _metaDataMap[refly90DegreesName])
@@ -106,7 +106,7 @@ TransectStyleComplexItem::TransectStyleComplexItem(PlanMasterController* masterC
     connect(&_cameraCalc,                               &CameraCalc::distanceToSurfaceRelativeChanged,  this, &TransectStyleComplexItem::_amslExitAltChanged);
     connect(&_cameraCalc,                               &CameraCalc::distanceToSurfaceRelativeChanged,  this, &TransectStyleComplexItem::_updateFlightPathSegmentsSignal);
 
-    connect(&_cameraCalc,                               &CameraCalc::distanceToSurfaceRelativeChanged,  _missionController, &MissionController::recalcTerrainProfile);
+    connect(&_cameraCalc,                               &CameraCalc::distanceToSurfaceRelativeChanged,  _vehicle->planMasterController()->missionController(), &MissionController::recalcTerrainProfile);
 
     connect(&_hoverAndCaptureFact,                      &Fact::rawValueChanged,         this, &TransectStyleComplexItem::_handleHoverAndCaptureEnabled);
 
@@ -115,11 +115,11 @@ TransectStyleComplexItem::TransectStyleComplexItem(PlanMasterController* masterC
     connect(this,                                       &TransectStyleComplexItem::followTerrainChanged,        this, &TransectStyleComplexItem::_followTerrainChanged);
     connect(this,                                       &TransectStyleComplexItem::wizardModeChanged,           this, &TransectStyleComplexItem::readyForSaveStateChanged);
 
-    connect(_missionController,                         &MissionController::plannedHomePositionChanged,         this, &TransectStyleComplexItem::_amslEntryAltChanged);
-    connect(_missionController,                         &MissionController::plannedHomePositionChanged,         this, &TransectStyleComplexItem::_amslExitAltChanged);
+    connect(_vehicle,                                   &Vehicle::homePositionChanged,                          this, &TransectStyleComplexItem::_amslEntryAltChanged);
+    connect(_vehicle,                                   &Vehicle::homePositionChanged,                          this, &TransectStyleComplexItem::_amslExitAltChanged);
 
-    connect(_missionController,                         &MissionController::plannedHomePositionChanged,         this, &TransectStyleComplexItem::minAMSLAltitudeChanged);
-    connect(_missionController,                         &MissionController::plannedHomePositionChanged,         this, &TransectStyleComplexItem::maxAMSLAltitudeChanged);
+    connect(_vehicle,                                   &Vehicle::homePositionChanged,                          this, &TransectStyleComplexItem::minAMSLAltitudeChanged);
+    connect(_vehicle,                                   &Vehicle::homePositionChanged,                          this, &TransectStyleComplexItem::maxAMSLAltitudeChanged);
     connect(_cameraCalc.distanceToSurface(),            &Fact::rawValueChanged,                                 this, &TransectStyleComplexItem::minAMSLAltitudeChanged);
     connect(_cameraCalc.distanceToSurface(),            &Fact::rawValueChanged,                                 this, &TransectStyleComplexItem::maxAMSLAltitudeChanged);
     connect(&_cameraCalc,                               &CameraCalc::distanceToSurfaceRelativeChanged,          this, &TransectStyleComplexItem::minAMSLAltitudeChanged);
@@ -305,7 +305,7 @@ bool TransectStyleComplexItem::_load(const QJsonObject& complexObject, bool forP
             _maxAMSLAltitude = qQNaN();
             MissionCommandTree* commandTree = qgcApp()->toolbox()->missionCommandTree();
             for (const MissionItem* missionItem: _loadedMissionItems) {
-                const MissionCommandUIInfo* uiInfo = commandTree->getUIInfo(_controllerVehicle, QGCMAVLink::VehicleClassGeneric, missionItem->command());
+                const MissionCommandUIInfo* uiInfo = commandTree->getUIInfo(_vehicle, QGCMAVLink::VehicleClassGeneric, missionItem->command());
                 if (uiInfo && uiInfo->specifiesCoordinate() && !uiInfo->isStandaloneCoordinate()) {
                     _minAMSLAltitude = std::fmin(_minAMSLAltitude, missionItem->param7());
                     _maxAMSLAltitude = std::fmax(_maxAMSLAltitude, missionItem->param7());
@@ -385,7 +385,7 @@ double TransectStyleComplexItem::_turnAroundDistance(void) const
 
 bool TransectStyleComplexItem::hoverAndCaptureAllowed(void) const
 {
-    return _controllerVehicle->multiRotor() || _controllerVehicle->vtol();
+    return _vehicle->multiRotor() || _vehicle->vtol();
 }
 
 void TransectStyleComplexItem::_rebuildTransects(void)
@@ -531,7 +531,7 @@ void TransectStyleComplexItem::_updateFlightPathSegmentsDontCallDirectly(void)
         _surveyAreaPolygon.setShowAltColor(true);
     }
 
-    _masterController->missionController()->recalcTerrainProfile();
+    _vehicle->planMasterController()->missionController()->recalcTerrainProfile();
 }
 
 void TransectStyleComplexItem::_queryTransectsPathHeightInfo(void)
@@ -1048,7 +1048,7 @@ TransectStyleComplexItem::BuildMissionItemsState_t TransectStyleComplexItem::_bu
     state.imagesInTurnaround        = _cameraTriggerInTurnAroundFact.rawValue().toBool();
     state.hasTurnarounds            = _turnAroundDistance() != 0;
     state.addTriggerAtFirstAndLastPoint  = !hoverAndCaptureEnabled() && state.imagesInTurnaround && triggerCamera();
-    state.useConditionGate          = _controllerVehicle->firmwarePlugin()->supportedMissionCommands(QGCMAVLink::VehicleClassGeneric).contains(MAV_CMD_CONDITION_GATE) &&
+    state.useConditionGate          = _vehicle->firmwarePlugin()->supportedMissionCommands(QGCMAVLink::VehicleClassGeneric).contains(MAV_CMD_CONDITION_GATE) &&
             triggerCamera() &&
             !hoverAndCaptureEnabled();
 
@@ -1165,7 +1165,7 @@ double TransectStyleComplexItem::amslEntryAlt(void) const
             MissionCommandTree* commandTree = qgcApp()->toolbox()->missionCommandTree();
             for (int i=0; i<_loadedMissionItems.count(); i++) {
                 MissionItem* item = _loadedMissionItems[i];
-                const MissionCommandUIInfo* uiInfo = commandTree->getUIInfo(_controllerVehicle, QGCMAVLink::VehicleClassGeneric, item->command());
+                const MissionCommandUIInfo* uiInfo = commandTree->getUIInfo(_vehicle, QGCMAVLink::VehicleClassGeneric, item->command());
                 if (uiInfo && uiInfo->specifiesCoordinate() && !uiInfo->isStandaloneCoordinate()) {
                     alt = item->param7();
                     break;
@@ -1177,7 +1177,7 @@ double TransectStyleComplexItem::amslEntryAlt(void) const
             }
         }
     } else {
-        alt = _cameraCalc.distanceToSurface()->rawValue().toDouble() + (_cameraCalc.distanceToSurfaceRelative() ? _missionController->plannedHomePosition().altitude() : 0) ;
+        alt = _cameraCalc.distanceToSurface()->rawValue().toDouble() + (_cameraCalc.distanceToSurfaceRelative() ? _vehicle->homePosition().altitude() : 0) ;
     }
 
     return alt;
@@ -1193,7 +1193,7 @@ double TransectStyleComplexItem::amslExitAlt(void) const
             MissionCommandTree* commandTree = qgcApp()->toolbox()->missionCommandTree();
             for (int i=_loadedMissionItems.count()-1; i>0; i--) {
                 MissionItem* item = _loadedMissionItems[i];
-                const MissionCommandUIInfo* uiInfo = commandTree->getUIInfo(_controllerVehicle, QGCMAVLink::VehicleClassGeneric, item->command());
+                const MissionCommandUIInfo* uiInfo = commandTree->getUIInfo(_vehicle, QGCMAVLink::VehicleClassGeneric, item->command());
                 if (uiInfo && uiInfo->specifiesCoordinate() && !uiInfo->isStandaloneCoordinate()) {
                     alt = item->param7();
                     break;
@@ -1205,7 +1205,7 @@ double TransectStyleComplexItem::amslExitAlt(void) const
             }
         }
     } else {
-        alt = _cameraCalc.distanceToSurface()->rawValue().toDouble() + (_cameraCalc.distanceToSurfaceRelative() ? _missionController->plannedHomePosition().altitude() : 0) ;
+        alt = _cameraCalc.distanceToSurface()->rawValue().toDouble() + (_cameraCalc.distanceToSurfaceRelative() ? _vehicle->homePosition().altitude() : 0) ;
     }
 
     return alt;
@@ -1223,7 +1223,7 @@ double TransectStyleComplexItem::minAMSLAltitude(void) const
     if (_followTerrain) {
         return _minAMSLAltitude;
     } else {
-        return _cameraCalc.distanceToSurface()->rawValue().toDouble() + (_cameraCalc.distanceToSurfaceRelative() ? _missionController->plannedHomePosition().altitude() : 0);
+        return _cameraCalc.distanceToSurface()->rawValue().toDouble() + (_cameraCalc.distanceToSurfaceRelative() ? _vehicle->homePosition().altitude() : 0);
     }
 }
 
@@ -1232,6 +1232,6 @@ double TransectStyleComplexItem::maxAMSLAltitude(void) const
     if (_followTerrain) {
         return _maxAMSLAltitude;
     } else {
-        return _cameraCalc.distanceToSurface()->rawValue().toDouble() + (_cameraCalc.distanceToSurfaceRelative() ? _missionController->plannedHomePosition().altitude() : 0);
+        return _cameraCalc.distanceToSurface()->rawValue().toDouble() + (_cameraCalc.distanceToSurfaceRelative() ? _vehicle->homePosition().altitude() : 0);
     }
 }

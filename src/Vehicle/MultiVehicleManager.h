@@ -73,6 +73,11 @@ public:
 
     QGeoCoordinate lastKnownLocation    () { return _lastKnownLocation; }
 
+#ifdef UNITTEST_BUILD
+    // Used by unit tests to reset
+    void _resetOfflineVehicle(void);
+#endif
+
 signals:
     void vehicleAdded                   (Vehicle* vehicle);
     void vehicleRemoved                 (Vehicle* vehicle);

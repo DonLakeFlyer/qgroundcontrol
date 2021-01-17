@@ -53,7 +53,7 @@ class TestTransectStyleItem : public TransectStyleComplexItem
     Q_OBJECT
 
 public:
-    TestTransectStyleItem(PlanMasterController* masterController, QObject* parent = nullptr);
+    TestTransectStyleItem(Vehicle* vehicle, QObject* parent = nullptr);
 
     void adjustSurveAreaPolygon(void);
 

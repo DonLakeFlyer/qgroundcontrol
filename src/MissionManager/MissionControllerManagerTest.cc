@@ -7,11 +7,11 @@
  *
  ****************************************************************************/
 
-
 #include "MissionControllerManagerTest.h"
 #include "LinkManager.h"
 #include "MultiVehicleManager.h"
 #include "QGCApplication.h"
+#include "PlanMasterController.h"
 
 MissionControllerManagerTest::MissionControllerManagerTest(void)
 {
@@ -32,22 +32,21 @@ void MissionControllerManagerTest::_initForFirmwareType(MAV_AUTOPILOT firmwareTy
     
     // Wait for the Mission Manager to finish it's initial load
     
-    _missionManager = qgcApp()->toolbox()->multiVehicleManager()->activeVehicle()->missionManager();
+    _missionManager = _vehicle->planMasterController()->missionManager();
     QVERIFY(_missionManager);
     
-    _rgMissionManagerSignals[newMissionItemsAvailableSignalIndex] = SIGNAL(newMissionItemsAvailable(bool));
-    _rgMissionManagerSignals[sendCompleteSignalIndex] =             SIGNAL(sendComplete(bool));
-    _rgMissionManagerSignals[inProgressChangedSignalIndex] =        SIGNAL(inProgressChanged(bool));
-    _rgMissionManagerSignals[errorSignalIndex] =                    SIGNAL(error(int, const QString&));
+    _rgMissionManagerSignals[loadCompleteSignalIndex]       = SIGNAL(loadComplete(bool));
+    _rgMissionManagerSignals[sendCompleteSignalIndex]       = SIGNAL(sendComplete(bool));
+    _rgMissionManagerSignals[inProgressChangedSignalIndex]  = SIGNAL(inProgressChanged(bool));
 
     _multiSpyMissionManager = new MultiSignalSpy();
     Q_CHECK_PTR(_multiSpyMissionManager);
     QCOMPARE(_multiSpyMissionManager->init(_missionManager, _rgMissionManagerSignals, _cMissionManagerSignals), true);
     
     if (_missionManager->inProgress()) {
-        _multiSpyMissionManager->waitForSignalByIndex(newMissionItemsAvailableSignalIndex, _missionManagerSignalWaitTime);
+        _multiSpyMissionManager->waitForSignalByIndex(loadCompleteSignalIndex, _missionManagerSignalWaitTime);
         _multiSpyMissionManager->waitForSignalByIndex(inProgressChangedSignalIndex, _missionManagerSignalWaitTime);
-        QCOMPARE(_multiSpyMissionManager->checkSignalByMask(newMissionItemsAvailableSignalMask | inProgressChangedSignalMask), true);
+        QCOMPARE(_multiSpyMissionManager->checkSignalByMask(loadCompleteSignalMask | inProgressChangedSignalMask), true);
     }
     
     QVERIFY(!_missionManager->inProgress());

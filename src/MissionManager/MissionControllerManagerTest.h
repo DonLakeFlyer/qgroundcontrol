@@ -54,18 +54,16 @@ protected:
     } TestCase_t;
 
     typedef enum {
-        newMissionItemsAvailableSignalIndex = 0,
+        loadCompleteSignalIndex = 0,
         sendCompleteSignalIndex,
         inProgressChangedSignalIndex,
-        errorSignalIndex,
         maxSignalIndex
     } MissionManagerSignalIndex_t;
 
     typedef enum {
-        newMissionItemsAvailableSignalMask =    1 << newMissionItemsAvailableSignalIndex,
-        sendCompleteSignalMask =                1 << sendCompleteSignalIndex,
-        inProgressChangedSignalMask =           1 << inProgressChangedSignalIndex,
-        errorSignalMask =                       1 << errorSignalIndex,
+        loadCompleteSignalMask      = 1 << loadCompleteSignalIndex,
+        sendCompleteSignalMask      = 1 << sendCompleteSignalIndex,
+        inProgressChangedSignalMask = 1 << inProgressChangedSignalIndex,
     } MissionManagerSignalMask_t;
 
     MultiSignalSpy*     _multiSpyMissionManager;

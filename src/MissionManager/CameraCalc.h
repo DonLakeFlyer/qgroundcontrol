@@ -12,14 +12,14 @@
 #include "CameraSpec.h"
 #include "SettingsFact.h"
 
-class PlanMasterController;
+class Vehicle;
 
 class CameraCalc : public CameraSpec
 {
     Q_OBJECT
 
 public:
-    CameraCalc(PlanMasterController* masterController, const QString& settingsGroup, QObject* parent = nullptr);
+    CameraCalc(Vehicle* vehicle, const QString& settingsGroup, QObject* parent = nullptr);
 
     Q_PROPERTY(QString          xlatCustomCameraName        READ xlatCustomCameraName                                           CONSTANT)                                   ///< User visible camera name for custom camera setting
     Q_PROPERTY(QString          xlatManualCameraName        READ xlatManualCameraName                                           CONSTANT)                                   ///< User visible camera name for manual camera setting

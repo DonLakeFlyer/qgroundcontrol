@@ -18,15 +18,14 @@
 
 #include <QSettings>
 
-class PlanMasterController;
-class MissionController;
+class Vehicle;
 
 class ComplexMissionItem : public VisualMissionItem
 {
     Q_OBJECT
 
 public:
-    ComplexMissionItem(PlanMasterController* masterController, bool flyView, QObject* parent);
+    ComplexMissionItem(Vehicle* Vehicle, QObject* parent);
 
     const ComplexMissionItem& operator=(const ComplexMissionItem& other);
 
@@ -119,16 +118,13 @@ protected:
     QJsonObject _loadPresetJson         (const QString& name);
     void        _appendFlightPathSegment(const QGeoCoordinate& coord1, double coord1AMSLAlt, const QGeoCoordinate& coord2, double coord2AMSLAlt);
 
-    bool                _isIncomplete =                 true;
-    int                 _cTerrainCollisionSegments =    0;
-    QmlObjectListModel  _flightPathSegments;                // Contains FlightPathSegment items
-
-    QMap<QString, FactMetaData*> _metaDataMap;
+    bool                            _isIncomplete               = true;
+    int                             _cTerrainCollisionSegments  = 0;
+    QmlObjectListModel              _flightPathSegments;                // Contains FlightPathSegment items
+    QMap<QString, FactMetaData*>    _metaDataMap;
+    QGCToolbox*                     _toolbox;
+    SettingsManager*                _settingsManager;
 
     static const char* _presetSettingsKey;
 
-    QGCToolbox* _toolbox;
-    SettingsManager* _settingsManager;
-
-private:
 };

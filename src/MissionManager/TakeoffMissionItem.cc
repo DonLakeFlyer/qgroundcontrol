@@ -18,25 +18,25 @@
 #include "MissionCommandUIInfo.h"
 #include "QGroundControlQmlGlobal.h"
 #include "SettingsManager.h"
-#include "PlanMasterController.h"
+#include "QGC.h"
 
-TakeoffMissionItem::TakeoffMissionItem(PlanMasterController* masterController, bool flyView, MissionSettingsItem* settingsItem, bool forLoad, QObject* parent)
-    : SimpleMissionItem (masterController, flyView, forLoad, parent)
+TakeoffMissionItem::TakeoffMissionItem(Vehicle* vehicle, MissionSettingsItem* settingsItem, bool forLoad, QObject* parent)
+    : SimpleMissionItem (vehicle, forLoad, parent)
     , _settingsItem     (settingsItem)
 {
     _init(forLoad);
 }
 
-TakeoffMissionItem::TakeoffMissionItem(MAV_CMD takeoffCmd, PlanMasterController* masterController, bool flyView, MissionSettingsItem* settingsItem, QObject* parent)
-    : SimpleMissionItem (masterController, flyView, false /* forLoad */, parent)
+TakeoffMissionItem::TakeoffMissionItem(MAV_CMD takeoffCmd, Vehicle* vehicle, MissionSettingsItem* settingsItem, QObject* parent)
+    : SimpleMissionItem (vehicle, false /* forLoad */, parent)
     , _settingsItem     (settingsItem)
 {
     setCommand(takeoffCmd);
     _init(false /* forLoad */);
 }
 
-TakeoffMissionItem::TakeoffMissionItem(const MissionItem& missionItem, PlanMasterController* masterController, bool flyView, MissionSettingsItem* settingsItem, QObject* parent)
-    : SimpleMissionItem (masterController, flyView, missionItem, parent)
+TakeoffMissionItem::TakeoffMissionItem(const MissionItem& missionItem, Vehicle* vehicle, MissionSettingsItem* settingsItem, QObject* parent)
+    : SimpleMissionItem (vehicle, missionItem, parent)
     , _settingsItem     (settingsItem)
 {
     _init(false /* forLoad */);
@@ -52,23 +52,7 @@ void TakeoffMissionItem::_init(bool forLoad)
 {
     _editorQml = QStringLiteral("qrc:/qml/SimpleItemEditor.qml");
 
-    connect(_settingsItem, &MissionSettingsItem::coordinateChanged, this, &TakeoffMissionItem::launchCoordinateChanged);
-
-    if (_flyView) {
-        _initLaunchTakeoffAtSameLocation();
-        return;
-    }
-
-    QGeoCoordinate homePosition = _settingsItem->coordinate();
-    if (!homePosition.isValid()) {
-        Vehicle* activeVehicle = qgcApp()->toolbox()->multiVehicleManager()->activeVehicle();
-        if (activeVehicle) {
-            homePosition = activeVehicle->homePosition();
-            if (homePosition.isValid()) {
-                _settingsItem->setCoordinate(homePosition);
-            }
-        }
-    }
+    connect(_vehicle, &Vehicle::homePositionChanged, this, &TakeoffMissionItem::launchCoordinateChanged);
 
     if (forLoad) {
         // Load routines will set the rest up after load
@@ -77,13 +61,12 @@ void TakeoffMissionItem::_init(bool forLoad)
 
     _initLaunchTakeoffAtSameLocation();
 
-    if (homePosition.isValid() && coordinate().isValid()) {
+    if (coordinate().isValid()) {
         // Item already fully specified, most likely from mission load from storage
         _wizardMode = false;
     } else {
-        if (_launchTakeoffAtSameLocation && homePosition.isValid()) {
+        if (_launchTakeoffAtSameLocation) {
             _wizardMode = false;
-            SimpleMissionItem::setCoordinate(homePosition);
         } else {
             _wizardMode = true;
         }
@@ -122,14 +105,14 @@ bool TakeoffMissionItem::isTakeoffCommand(MAV_CMD command)
 void TakeoffMissionItem::_initLaunchTakeoffAtSameLocation(void)
 {
     if (specifiesCoordinate()) {
-        if (_controllerVehicle->fixedWing() || _controllerVehicle->vtol()) {
+        if (_vehicle->fixedWing() || _vehicle->vtol()) {
             setLaunchTakeoffAtSameLocation(false);
         } else {
             // PX4 specifies a coordinate for takeoff even for multi-rotor. But it makes more sense to not have a coordinate
-            // from and end user standpoint. So even for PX4 we try to keep launch and takeoff at the same position. Unless the
+            // from an end user standpoint. So even for PX4 we try to keep launch and takeoff at the same position. Unless the
             // user has moved/loaded launch at a different location than takeoff.
-            if (coordinate().isValid() && _settingsItem->coordinate().isValid()) {
-                setLaunchTakeoffAtSameLocation(coordinate().latitude() == _settingsItem->coordinate().latitude() && coordinate().longitude() == _settingsItem->coordinate().longitude());
+            if (coordinate().isValid()) {
+                setLaunchTakeoffAtSameLocation(QGC::fuzzyCompare(coordinate().latitude(), _vehicle->homePosition().latitude()) && QGC::fuzzyCompare(coordinate().longitude(), _vehicle->homePosition().longitude()));
             } else {
                 setLaunchTakeoffAtSameLocation(true);
             }
@@ -166,7 +149,7 @@ void TakeoffMissionItem::setLaunchCoordinate(const QGeoCoordinate& launchCoordin
         return;
     }
 
-    _settingsItem->setCoordinate(launchCoordinate);
+    _vehicle->setHomePosition(launchCoordinate);
 
     if (!coordinate().isValid()) {
         QGeoCoordinate takeoffCoordinate;
@@ -174,7 +157,7 @@ void TakeoffMissionItem::setLaunchCoordinate(const QGeoCoordinate& launchCoordin
             takeoffCoordinate = launchCoordinate;
         } else {
             double distance = qgcApp()->toolbox()->settingsManager()->planViewSettings()->vtolTransitionDistance()->rawValue().toDouble(); // Default distance is VTOL transition to takeoff point distance
-            if (_controllerVehicle->fixedWing()) {
+            if (_vehicle->fixedWing()) {
                 double altitude = this->altitude()->rawValue().toDouble();
 
                 if (altitudeMode() == QGroundControlQmlGlobal::AltitudeModeRelative) {

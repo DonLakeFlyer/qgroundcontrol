@@ -7,8 +7,7 @@
  *
  ****************************************************************************/
 
-#ifndef FixedWingLandingComplexItem_H
-#define FixedWingLandingComplexItem_H
+#pragma once
 
 #include "LandingComplexItem.h"
 #include "MissionItem.h"
@@ -18,14 +17,14 @@
 Q_DECLARE_LOGGING_CATEGORY(FixedWingLandingComplexItemLog)
 
 class FWLandingPatternTest;
-class PlanMasterController;
+class Vehicle;
 
 class FixedWingLandingComplexItem : public LandingComplexItem
 {
     Q_OBJECT
 
 public:
-    FixedWingLandingComplexItem(PlanMasterController* masterController, bool flyView, QObject* parent);
+    FixedWingLandingComplexItem(Vehicle* vehicle, QObject* parent);
 
     Q_PROPERTY(Fact*            valueSetIsDistance      READ    valueSetIsDistance                                          CONSTANT)
     Q_PROPERTY(Fact*            glideSlope              READ    glideSlope                                                  CONSTANT)
@@ -36,7 +35,7 @@ public:
     Fact*           valueSetIsDistance      (void) { return &_valueSetIsDistanceFact; }
 
     /// Scans the loaded items for a landing pattern complex item
-    static bool scanForItem(QmlObjectListModel* visualItems, bool flyView, PlanMasterController* masterController);
+    static bool scanForItem(QmlObjectListModel* visualItems, Vehicle* vehicle);
 
     // Overrides from ComplexMissionItem
     QString patternName         (void) const final { return name; }
@@ -59,7 +58,7 @@ private slots:
     void _glideSlopeChanged                         (void);
 
 private:
-    static LandingComplexItem*  _createItem     (PlanMasterController* masterController, bool flyView, QObject* parent) { return new FixedWingLandingComplexItem(masterController, flyView, parent); }
+    static LandingComplexItem*  _createItem     (Vehicle* vehicle, QObject* parent) { return new FixedWingLandingComplexItem(vehicle, parent); }
     static bool                 _isValidLandItem(const MissionItem& missionItem);
 
     // Overrides from LandingComplexItem
@@ -93,5 +92,3 @@ private:
 
     friend FWLandingPatternTest;
 };
-
-#endif

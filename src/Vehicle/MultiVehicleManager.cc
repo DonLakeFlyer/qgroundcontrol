@@ -389,3 +389,11 @@ void MultiVehicleManager::_sendGCSHeartbeat(void)
         }
     }
 }
+
+#ifdef UNITTEST_BUILD
+void MultiVehicleManager::_resetOfflineVehicle(void)
+{
+    delete _offlineEditingVehicle;
+    _offlineEditingVehicle = new Vehicle(Vehicle::MAV_AUTOPILOT_TRACK, Vehicle::MAV_TYPE_TRACK, _firmwarePluginManager, this);
+}
+#endif

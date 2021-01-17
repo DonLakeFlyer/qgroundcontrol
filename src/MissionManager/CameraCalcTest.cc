@@ -20,9 +20,8 @@ void CameraCalcTest::init(void)
 {
     UnitTest::init();
 
-    _masterController = new PlanMasterController(this);
-    _controllerVehicle = _masterController->controllerVehicle();
-    _cameraCalc = new CameraCalc(_masterController, "CameraCalcUnitTest" /* settingsGroup */, this);
+    _masterController = _offlineVehicle()->planMasterController();
+    _cameraCalc = new CameraCalc(_masterController->vehicle(), "CameraCalcUnitTest" /* settingsGroup */, this);
     _cameraCalc->setCameraBrand(CameraCalc::canonicalCustomCameraName());
     _cameraCalc->setDirty(false);
 

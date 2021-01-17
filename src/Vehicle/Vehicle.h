@@ -35,9 +35,6 @@
 #include "VehicleEscStatusFactGroup.h"
 #include "VehicleEstimatorStatusFactGroup.h"
 #include "VehicleLinkManager.h"
-#include "MissionManager.h"
-#include "GeoFenceManager.h"
-#include "RallyPointManager.h"
 #include "FTPManager.h"
 
 class UAS;
@@ -62,6 +59,7 @@ class RequestMessageTest;
 class LinkInterface;
 class LinkManager;
 class InitialConnectStateMachine;
+class PlanMasterController;
 
 #if defined(QGC_AIRMAP_ENABLED)
 class AirspaceVehicleManager;
@@ -143,7 +141,7 @@ public:
     Q_PROPERTY(int                  id                          READ id                                                             CONSTANT)
     Q_PROPERTY(AutoPilotPlugin*     autopilot                   MEMBER _autopilotPlugin                                             CONSTANT)
     Q_PROPERTY(QGeoCoordinate       coordinate                  READ coordinate                                                     NOTIFY coordinateChanged)
-    Q_PROPERTY(QGeoCoordinate       homePosition                READ homePosition                                                   NOTIFY homePositionChanged)
+    Q_PROPERTY(QGeoCoordinate       homePosition                READ homePosition               WRITE setHomePosition               NOTIFY homePositionChanged)
     Q_PROPERTY(QGeoCoordinate       armedPosition               READ armedPosition                                                  NOTIFY armedPositionChanged)
     Q_PROPERTY(bool                 armed                       READ armed                      WRITE setArmedShowError             NOTIFY armedChanged)
     Q_PROPERTY(bool                 autoDisarm                  READ autoDisarm                                                     NOTIFY autoDisarmChanged)
@@ -362,8 +360,6 @@ public:
     /// Clear Messages
     Q_INVOKABLE void clearMessages();
 
-    Q_INVOKABLE void sendPlan(QString planFile);
-
     /// Used to check if running current version is equal or higher than the one being compared.
     //  returns 1 if current > compare, 0 if current == compare, -1 if current < compare
     Q_INVOKABLE int versionCompare(QString& compare);
@@ -442,6 +438,7 @@ public:
 
 
     QGeoCoordinate homePosition();
+    void setHomePosition(const QGeoCoordinate& coordinate);
 
     bool armed              () { return _armed; }
     void setArmed           (bool armed, bool showError);
@@ -612,9 +609,7 @@ public:
     FactGroup* terrainFactGroup             () { return &_terrainFactGroup; }
     QmlObjectListModel* batteries           () { return &_batteryFactGroupListModel; }
 
-    MissionManager*                 missionManager      () { return _missionManager; }
-    GeoFenceManager*                geoFenceManager     () { return _geoFenceManager; }
-    RallyPointManager*              rallyPointManager   () { return _rallyPointManager; }
+    PlanMasterController*           planMasterController() { return _planMasterController; }
     ParameterManager*               parameterManager    () { return _parameterManager; }
     ParameterManager*               parameterManager    () const { return _parameterManager; }
     VehicleLinkManager*             vehicleLinkManager  () { return _vehicleLinkManager; }
@@ -735,7 +730,6 @@ public:
 
     void _setFlying(bool flying);
     void _setLanding(bool landing);
-    void _setHomePosition(QGeoCoordinate& homeCoord);
     void _setMaxProtoVersion(unsigned version);
     void _setMaxProtoVersionFromBothSources();
 
@@ -875,9 +869,6 @@ private slots:
     void _handletextMessageReceived         (UASMessage* message);
     void _imageReady                        (UASInterface* uas);    ///< A new camera image has arrived
     void _prearmErrorTimeout                ();
-    void _firstMissionLoadComplete          ();
-    void _firstGeoFenceLoadComplete         ();
-    void _firstRallyPointLoadComplete       ();
     void _sendMavCommandResponseTimeoutCheck();
     void _clearCameraTriggerPoints          ();
     void _updateDistanceHeadingToHome       ();
@@ -926,9 +917,6 @@ private:
 #endif
     void _handleCameraImageCaptured     (const mavlink_message_t& message);
     void _handleADSBVehicle             (const mavlink_message_t& message);
-    void _missionManagerError           (int errorCode, const QString& errorMsg);
-    void _geoFenceManagerError          (int errorCode, const QString& errorMsg);
-    void _rallyPointManagerError        (int errorCode, const QString& errorMsg);
     void _say                           (const QString& text);
     QString _vehicleIdSpeech            ();
     void _handleMavlinkLoggingData      (mavlink_message_t& message);
@@ -1219,9 +1207,7 @@ private:
 
     TerrainProtocolHandler* _terrainProtocolHandler = nullptr;
 
-    MissionManager*                 _missionManager             = nullptr;
-    GeoFenceManager*                _geoFenceManager            = nullptr;
-    RallyPointManager*              _rallyPointManager          = nullptr;
+    PlanMasterController*           _planMasterController       = nullptr;
     VehicleLinkManager*             _vehicleLinkManager         = nullptr;
     FTPManager*                     _ftpManager                 = nullptr;
     InitialConnectStateMachine*     _initialConnectStateMachine = nullptr;

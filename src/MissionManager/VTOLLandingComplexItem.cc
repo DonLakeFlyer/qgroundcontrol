@@ -25,8 +25,8 @@ const QString VTOLLandingComplexItem::name(tr("VTOL Landing"));
 const char* VTOLLandingComplexItem::settingsGroup =            "VTOLLanding";
 const char* VTOLLandingComplexItem::jsonComplexItemTypeValue = "vtolLandingPattern";
 
-VTOLLandingComplexItem::VTOLLandingComplexItem(PlanMasterController* masterController, bool flyView, QObject* parent)
-    : LandingComplexItem        (masterController, flyView, parent)
+VTOLLandingComplexItem::VTOLLandingComplexItem(Vehicle* vehicle, QObject* parent)
+    : LandingComplexItem        (vehicle, parent)
     , _metaDataMap              (FactMetaData::createMapFromJsonFile(QStringLiteral(":/json/VTOLLandingPattern.FactMetaData.json"), this))
     , _landingDistanceFact      (settingsGroup, _metaDataMap[finalApproachToLandDistanceName])
     , _finalApproachAltitudeFact(settingsGroup, _metaDataMap[finalApproachAltitudeName])
@@ -117,9 +117,9 @@ bool VTOLLandingComplexItem::_isValidLandItem(const MissionItem& missionItem)
     }
 }
 
-bool VTOLLandingComplexItem::scanForItem(QmlObjectListModel* visualItems, bool flyView, PlanMasterController* masterController)
+bool VTOLLandingComplexItem::scanForItem(QmlObjectListModel* visualItems, Vehicle* vehicle)
 {
-    return _scanForItem(visualItems, flyView, masterController, _isValidLandItem, _createItem);
+    return _scanForItem(visualItems, vehicle, _isValidLandItem, _createItem);
 }
 
 // Never call this method directly. If you want to update the flight segments you emit _updateFlightPathSegmentsSignal()
@@ -145,5 +145,5 @@ void VTOLLandingComplexItem::_updateFlightPathSegmentsDontCallDirectly(void)
         emit terrainCollisionChanged(true);
     }
 
-    _masterController->missionController()->recalcTerrainProfile();
+    _vehicle->planMasterController()->missionController()->recalcTerrainProfile();
 }

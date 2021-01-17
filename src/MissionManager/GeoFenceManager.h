@@ -35,7 +35,7 @@ class GeoFenceManager : public PlanManager
     Q_OBJECT
     
 public:
-    GeoFenceManager(Vehicle* vehicle);
+    GeoFenceManager(Vehicle* vehicle, QObject* parent);
     ~GeoFenceManager();
     
     bool supported(void) const;
@@ -44,9 +44,6 @@ public:
     void sendToVehicle(const QGeoCoordinate&    breachReturn,   ///< Breach return point
                        QmlObjectListModel&      polygons,       ///< List of QGCFencePolygons
                        QmlObjectListModel&      circles);       ///< List of QGCFenceCircles
-
-    /// Signals removeAllComplete when done
-    void removeAll(void);
 
     /// Returns true if polygon fence is currently enabled on this vehicle
     ///     Signal: polygonEnabledChanged
@@ -66,20 +63,15 @@ public:
         BadPolygonItemFormat,   ///< Error re-creating polygons from mission items
         InvalidCircleRadius,
     } ErrorCode_t;
-    
-signals:
-    void loadComplete       (void);
-    void inProgressChanged  (bool inProgress);
-    void error              (int errorCode, const QString& errorMsg);
-    void removeAllComplete  (bool error);
-    void sendComplete       (bool error);
 
 private slots:
-    void _sendComplete              (bool error);
-    void _planManagerLoadComplete   (bool removeAllRequested);
+    void _managerSendComplete       (bool error);
+    void _managerLoadComplete       (bool error);
+    void _managerRemoveAllComplete  (bool error);
 
 private:
-    void _sendError(ErrorCode_t errorCode, const QString& errorMsg);
+    void _displayError  (ErrorCode_t errorCode, const QString& errorString);
+    void _clear         (void);
 
     QList<QGCFencePolygon>  _polygons;
     QList<QGCFenceCircle>   _circles;

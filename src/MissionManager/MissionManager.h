@@ -18,7 +18,7 @@ class MissionManager : public PlanManager
     Q_OBJECT
     
 public:
-    MissionManager(Vehicle* vehicle);
+    MissionManager(Vehicle* vehicle, QObject* parent);
     ~MissionManager();
         
     /// Current mission item as reported by MISSION_CURRENT

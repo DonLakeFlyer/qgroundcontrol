@@ -16,7 +16,7 @@
 
 #define VIDEO_CAPTURE_STATUS_INTERVAL 0.2   //-- Send capture status every 5 seconds
 
-class PlanMasterController;
+class Vehicle;
 class CameraSectionTest;
 
 
@@ -25,7 +25,7 @@ class CameraSection : public Section
     Q_OBJECT
 
 public:
-    CameraSection(PlanMasterController* masterController, QObject* parent = nullptr);
+    CameraSection(Vehicle* vehicle, QObject* parent = nullptr);
 
     // These enum values must match the json meta data
 

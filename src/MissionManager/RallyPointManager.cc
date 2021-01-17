@@ -10,30 +10,22 @@
 #include "RallyPointManager.h"
 #include "ParameterManager.h"
 #include "Vehicle.h"
+#include "QGCApplication.h"
 
 QGC_LOGGING_CATEGORY(RallyPointManagerLog, "RallyPointManagerLog")
 
-RallyPointManager::RallyPointManager(Vehicle* vehicle)
-    : PlanManager(vehicle, MAV_MISSION_TYPE_RALLY)
+RallyPointManager::RallyPointManager(Vehicle* vehicle, QObject* parent)
+    : PlanManager(vehicle, MAV_MISSION_TYPE_RALLY, parent)
 {
-    connect(this, &PlanManager::inProgressChanged,          this, &RallyPointManager::inProgressChanged);
-    connect(this, &PlanManager::error,                      this, &RallyPointManager::error);
-    connect(this, &PlanManager::removeAllComplete,          this, &RallyPointManager::removeAllComplete);
-    connect(this, &PlanManager::sendComplete,               this, &RallyPointManager::_sendComplete);
-    connect(this, &PlanManager::newMissionItemsAvailable,   this, &RallyPointManager::_planManagerLoadComplete);
+    connect(this, &PlanManager::_removeAllComplete, this, &RallyPointManager::_managerRemoveAllComplete);
+    connect(this, &PlanManager::_sendComplete,      this, &RallyPointManager::_managerSendComplete);
+    connect(this, &PlanManager::_loadComplete,      this, &RallyPointManager::_managerSendComplete);
 }
 
 
 RallyPointManager::~RallyPointManager()
 {
 
-}
-
-void RallyPointManager::_sendError(ErrorCode_t errorCode, const QString& errorMsg)
-{
-    qCDebug(RallyPointManagerLog) << "Sending error" << errorCode << errorMsg;
-
-    emit error(errorCode, errorMsg);
 }
 
 void RallyPointManager::sendToVehicle(const QList<QGeoCoordinate>& rgPoints)
@@ -63,43 +55,35 @@ void RallyPointManager::sendToVehicle(const QList<QGeoCoordinate>& rgPoints)
     writeMissionItems(rallyItems);
 }
 
-void RallyPointManager::removeAll(void)
-{
-    _rgPoints.clear();
-    PlanManager::removeAll();
-}
-
 bool RallyPointManager::supported(void) const
 {
     return (_vehicle->capabilityBits() & MAV_PROTOCOL_CAPABILITY_MISSION_RALLY) && (_vehicle->maxProtoVersion() >= 200);
 }
 
-void RallyPointManager::_planManagerLoadComplete(bool removeAllRequested)
+void RallyPointManager::_managerLoadComplete(bool error)
 {
     _rgPoints.clear();
 
-    Q_UNUSED(removeAllRequested);
+    if (!error) {
+        const QList<MissionItem*>& rallyItems = missionItems();
 
-    const QList<MissionItem*>& rallyItems = missionItems();
+        for (int i=0; i<rallyItems.count(); i++) {
+            MissionItem* item = rallyItems[i];
 
-    for (int i=0; i<rallyItems.count(); i++) {
-        MissionItem* item = rallyItems[i];
-
-        MAV_CMD command = item->command();
-
-        if (command == MAV_CMD_NAV_RALLY_POINT) {
-            _rgPoints.append(QGeoCoordinate(item->param5(), item->param6(), item->param7()));
-        } else {
-            qCDebug(RallyPointManagerLog) << "RallyPointManager load: Unsupported command %1" << item->command();
-            break;
+            MAV_CMD command = item->command();
+            if (command == MAV_CMD_NAV_RALLY_POINT) {
+                _rgPoints.append(QGeoCoordinate(item->param5(), item->param6(), item->param7()));
+            } else {
+                qCDebug(RallyPointManagerLog) << "RallyPointManager load: Unsupported command %1" << command;
+                break;
+            }
         }
     }
 
-
-    emit loadComplete();
+    emit loadComplete(error);
 }
 
-void RallyPointManager::_sendComplete(bool error)
+void RallyPointManager::_managerSendComplete(bool error)
 {
     if (error) {
         _rgPoints.clear();
@@ -108,4 +92,12 @@ void RallyPointManager::_sendComplete(bool error)
     }
     _rgSendPoints.clear();
     emit sendComplete(error);
+}
+
+void RallyPointManager::_managerRemoveAllComplete(bool error)
+{
+    if (!error) {
+        _rgPoints.clear();
+    }
+    emit removeAllComplete(error);
 }

@@ -7,8 +7,7 @@
  *
  ****************************************************************************/
 
-#ifndef PlanElementController_H
-#define PlanElementController_H
+#pragma once
 
 #include <QObject>
 
@@ -24,51 +23,36 @@ class PlanElementController : public QObject
     Q_OBJECT
     
 public:
-    PlanElementController(PlanMasterController* masterController, QObject* parent = nullptr);
+    PlanElementController(Vehicle* vehicle, QObject* parent);
     ~PlanElementController();
     
-    Q_PROPERTY(PlanMasterController*    masterController    READ masterController               CONSTANT)
-    Q_PROPERTY(bool                     supported           READ supported                      NOTIFY supportedChanged)        ///< true: Element is supported by Vehicle
-    Q_PROPERTY(bool                     containsItems       READ containsItems                  NOTIFY containsItemsChanged)    ///< true: Elemement is non-empty
-    Q_PROPERTY(bool                     syncInProgress      READ syncInProgress                 NOTIFY syncInProgressChanged)   ///< true: information is currently being saved/sent, false: no active save/send in progress
-    Q_PROPERTY(bool                     dirty               READ dirty          WRITE setDirty  NOTIFY dirtyChanged)            ///< true: unsaved/sent changes are present, false: no changes since last save/send
+    Q_PROPERTY(bool supported       READ supported                      NOTIFY supportedChanged)        ///< true: Element is supported by Vehicle
+    Q_PROPERTY(bool containsItems   READ containsItems                  NOTIFY containsItemsChanged)    ///< true: Elemement is non-empty
+    Q_PROPERTY(bool syncInProgress  READ syncInProgress                 NOTIFY syncInProgressChanged)   ///< true: information is currently being saved/sent, false: no active save/send in progress
+    Q_PROPERTY(bool dirty           READ dirty          WRITE setDirty  NOTIFY dirtyChanged)            ///< true: unsaved/sent changes are present, false: no changes since last save/send
 
-    PlanMasterController* masterController(void) { return _masterController; }
+    virtual void saveToJson         (QJsonObject& json) = 0;
+    virtual bool loadFromJson       (const QJsonObject& json, QString& errorString) = 0;
+    virtual void removeAll          (void) = 0;
 
-    /// Should be called immediately upon Component.onCompleted.
-    virtual void start(bool flyView);
-
-    virtual void save                       (QJsonObject& json) = 0;
-    virtual bool load                       (const QJsonObject& json, QString& errorString) = 0;
-    virtual void loadFromVehicle            (void) = 0;
-    virtual void removeAll                  (void) = 0;     ///< Removes all from controller only
-    virtual bool showPlanFromManagerVehicle (void) = 0;     /// true: controller is waiting for the current load to complete
-
-    virtual bool    supported       (void) const = 0;
-    virtual bool    containsItems   (void) const = 0;
-    virtual bool    syncInProgress  (void) const = 0;
-    virtual bool    dirty           (void) const = 0;
-    virtual void    setDirty        (bool dirty) = 0;
-
-    /// Sends the current plan element to the vehicle
-    ///     Signals sendComplete when done
-    virtual void sendToVehicle(void) = 0;
-
-    /// Removes all from vehicle and controller
-    ///     Signals removeAllComplete when done
-    virtual void removeAllFromVehicle(void) = 0;
+    virtual bool supported              (void) const = 0;
+    virtual bool containsItems          (void) const = 0;
+    virtual bool syncInProgress         (void) const = 0;
+    virtual bool dirty                  (void) const = 0;
+    virtual void setDirty               (bool dirty) = 0;
+    virtual void sendToVehicle          (void) = 0;         ///< Signals sendComplete when done
+    virtual void loadFromVehicle        (void) = 0;
+    virtual void removeAllFromVehicle   (void) = 0;         ///< Signals removeAllComplete when done
 
 signals:
     void supportedChanged       (bool supported);
     void containsItemsChanged   (bool containsItems);
     void syncInProgressChanged  (bool syncInProgress);
     void dirtyChanged           (bool dirty);
-    void sendComplete           (void);
-    void removeAllComplete      (void);
+    void sendComplete           (bool error);
+    void loadComplete           (bool error);
+    void removeAllComplete      (bool error);
 
 protected:
-    PlanMasterController*   _masterController;
-    bool                    _flyView;
+    Vehicle* _vehicle = nullptr;
 };
-
-#endif

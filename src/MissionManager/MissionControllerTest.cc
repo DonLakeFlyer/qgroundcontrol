@@ -27,9 +27,6 @@ MissionControllerTest::MissionControllerTest(void)
 
 void MissionControllerTest::cleanup(void)
 {
-    delete _masterController;
-    _masterController = nullptr;
-
     delete _multiSpyMissionController;
     _multiSpyMissionController = nullptr;
 
@@ -51,19 +48,12 @@ void MissionControllerTest::_initForFirmwareType(MAV_AUTOPILOT firmwareType)
 
     // Master controller pulls offline vehicle info from settings
     qgcApp()->toolbox()->settingsManager()->appSettings()->offlineEditingFirmwareClass()->setRawValue(QGCMAVLink::firmwareClass(firmwareType));
-    _masterController = new PlanMasterController(this);
-    _masterController->setFlyView(false);
+    _masterController = _offlineVehicle()->planMasterController();
     _missionController = _masterController->missionController();
 
     _multiSpyMissionController = new MultiSignalSpy();
     Q_CHECK_PTR(_multiSpyMissionController);
     QCOMPARE(_multiSpyMissionController->init(_missionController, _rgMissionControllerSignals, _cMissionControllerSignals), true);
-
-    _masterController->start();
-
-    // All signals should some through on start
-    QCOMPARE(_multiSpyMissionController->checkOnlySignalsByMask(visualItemsChangedSignalMask), true);
-    _multiSpyMissionController->clearAllSignals();
 
     QmlObjectListModel* visualItems = _missionController->visualItems();
     QVERIFY(visualItems);
@@ -235,7 +225,7 @@ void MissionControllerTest::_testVehicleYawRecalc(void)
 void MissionControllerTest::_testLoadJsonSectionAvailable(void)
 {
     _initForFirmwareType(MAV_AUTOPILOT_PX4);
-    _masterController->loadFromFile(":/unittest/SectionTest.plan");
+    _masterController->loadFromFileAndSendToVehicle(":/unittest/SectionTest.plan");
 
     QmlObjectListModel* visualItems = _missionController->visualItems();
     QVERIFY(visualItems);
@@ -271,20 +261,22 @@ void MissionControllerTest::_testGlobalAltMode(void)
     };
 
     for (const _globalAltMode_s& testCase: altModeTestCases) {
+        qDebug() << QStringLiteral("altMode:%1 expectedMavFrame:%2").arg(QGroundControlQmlGlobal::altitudeModeShortDescription(testCase.altMode)).arg(testCase.expectedMavFrame);
         _missionController->removeAll();
         _missionController->setGlobalAltitudeMode(testCase.altMode);
 
-        _missionController->insertTakeoffItem(QGeoCoordinate(0, 0), 1);
+        _missionController->insertTakeoffItem(QGeoCoordinate(0, 0), 1);         // Always QGroundControlQmlGlobal::AltitudeModeRelative
         _missionController->insertSimpleMissionItem(QGeoCoordinate(0, 0), 2);
         _missionController->insertSimpleMissionItem(QGeoCoordinate(0, 0), 3);
         _missionController->insertSimpleMissionItem(QGeoCoordinate(0, 0), 4);
 
+        // Takeoff item
         SimpleMissionItem* si = qobject_cast<SimpleMissionItem*>(_missionController->visualItems()->value<VisualMissionItem*>(1));
         QCOMPARE(si->altitudeMode(), QGroundControlQmlGlobal::AltitudeModeRelative);
         QCOMPARE(si->missionItem().frame(), MAV_FRAME_GLOBAL_RELATIVE_ALT);
 
         for (int i=2; i<_missionController->visualItems()->count(); i++) {
-            qDebug() << i;
+            qDebug() << QStringLiteral("viIndex:%1").arg(i);
             SimpleMissionItem* si = qobject_cast<SimpleMissionItem*>(_missionController->visualItems()->value<VisualMissionItem*>(i));
             QCOMPARE(si->altitudeMode(), testCase.altMode);
             QCOMPARE(si->missionItem().frame(), testCase.expectedMavFrame);

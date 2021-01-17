@@ -26,6 +26,7 @@
 #include "ArduCopterFirmwarePlugin.h"
 #include "ArduRoverFirmwarePlugin.h"
 #include "ArduSubFirmwarePlugin.h"
+#include "PlanMasterController.h"
 
 #include <QTcpSocket>
 
@@ -691,7 +692,7 @@ void APMFirmwarePlugin::guidedModeGotoLocation(Vehicle* vehicle, const QGeoCoord
 
     QGeoCoordinate coordWithAltitude = gotoCoord;
     coordWithAltitude.setAltitude(vehicle->altitudeRelative()->rawValue().toDouble());
-    vehicle->missionManager()->writeArduPilotGuidedMissionItem(coordWithAltitude, false /* altChangeOnly */);
+    vehicle->planMasterController()->missionManager()->writeArduPilotGuidedMissionItem(coordWithAltitude, false /* altChangeOnly */);
 }
 
 void APMFirmwarePlugin::guidedModeRTL(Vehicle* vehicle, bool smartRTL)

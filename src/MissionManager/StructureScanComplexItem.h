@@ -7,9 +7,7 @@
  *
  ****************************************************************************/
 
-
-#ifndef StructureScanComplexItem_H
-#define StructureScanComplexItem_H
+#pragma once
 
 #include "ComplexMissionItem.h"
 #include "MissionItem.h"
@@ -20,7 +18,7 @@
 
 Q_DECLARE_LOGGING_CATEGORY(StructureScanComplexItemLog)
 
-class PlanMasterController;
+class Vehicle;
 
 class StructureScanComplexItem : public ComplexMissionItem
 {
@@ -29,7 +27,7 @@ class StructureScanComplexItem : public ComplexMissionItem
 public:
     /// @param flyView true: Created for use in the Fly View, false: Created for use in the Plan View
     /// @param kmlOrSHPFile Polygon comes from this file, empty for default polygon
-    StructureScanComplexItem(PlanMasterController* masterController, bool flyView, const QString& kmlOrSHPFile, QObject* parent);
+    StructureScanComplexItem(Vehicle* vehicle, const QString& kmlOrSHPFile, QObject* parent);
 
     Q_PROPERTY(CameraCalc*      cameraCalc                  READ cameraCalc                                                 CONSTANT)
     Q_PROPERTY(Fact*            entranceAlt                 READ entranceAlt                                                CONSTANT)
@@ -166,5 +164,3 @@ private:
 
     friend class StructureScanComplexItemTest;
 };
-
-#endif

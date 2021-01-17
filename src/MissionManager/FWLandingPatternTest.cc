@@ -22,7 +22,7 @@ void FWLandingPatternTest::init(void)
 {
     VisualMissionItemTest::init();
 
-    _fwItem = new FixedWingLandingComplexItem(_masterController, false /* flyView */, this);
+    _fwItem = new FixedWingLandingComplexItem(_offlineVehicle(), this);
     _createSpy(_fwItem, &_viSpy);
 
     // Start in a clean state
@@ -32,9 +32,9 @@ void FWLandingPatternTest::init(void)
     QVERIFY(!_fwItem->dirty());
     _viSpy->clearAllSignals();
 
-    _validStopVideoItem =       CameraSectionTest::createValidStopTimeItem(_masterController, this);
-    _validStopDistanceItem =    CameraSectionTest::createValidStopTimeItem(_masterController, this);
-    _validStopTimeItem =        CameraSectionTest::createValidStopTimeItem(_masterController, this);
+    _validStopVideoItem     = CameraSectionTest::createValidStopTimeItem(this);
+    _validStopDistanceItem  = CameraSectionTest::createValidStopTimeItem(this);
+    _validStopTimeItem      = CameraSectionTest::createValidStopTimeItem(this);
 }
 
 void FWLandingPatternTest::cleanup(void)
@@ -86,7 +86,7 @@ void FWLandingPatternTest::_testSaveLoad(void)
     _fwItem->save(items);
 
     QString errorString;
-    FixedWingLandingComplexItem* newItem = new FixedWingLandingComplexItem(_masterController, false /* flyView */, this /* parent */);
+    FixedWingLandingComplexItem* newItem = new FixedWingLandingComplexItem(_offlineVehicle(), this /* parent */);
     bool success =newItem->load(items[0].toObject(), 10, errorString);
     if (!success) {
         qDebug() << errorString;

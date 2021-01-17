@@ -74,7 +74,7 @@ class SimpleLandingComplexItem : public LandingComplexItem
     Q_OBJECT
 
 public:
-    SimpleLandingComplexItem(PlanMasterController* masterController, bool flyView, QObject* parent);
+    SimpleLandingComplexItem(Vehicle* vehicle, QObject* parent);
 
     // Overrides from ComplexMissionItem
     QString patternName (void) const final { return QString(); }
@@ -94,7 +94,7 @@ private slots:
     void _updateFlightPathSegmentsDontCallDirectly(void) override;
 
 private:
-    static LandingComplexItem*  _createItem     (PlanMasterController* masterController, bool flyView, QObject* parent) { return new SimpleLandingComplexItem(masterController, flyView, parent); }
+    static LandingComplexItem*  _createItem     (Vehicle* vehicle, QObject* parent) { return new SimpleLandingComplexItem(vehicle, parent); }
     static bool                 _isValidLandItem(const MissionItem& missionItem);
 
     // Overrides from LandingComplexItem

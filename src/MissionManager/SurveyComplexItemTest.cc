@@ -32,7 +32,7 @@ void SurveyComplexItemTest::init(void)
     _rgSurveySignals[surveyRefly90DegreesChangedIndex] =          SIGNAL(refly90DegreesChanged(bool));
     _rgSurveySignals[surveyDirtyChangedIndex] =                   SIGNAL(dirtyChanged(bool));
 
-    _surveyItem = new SurveyComplexItem(_masterController, false /* flyView */, QString() /* kmlFile */, this /* parent */);
+    _surveyItem = new SurveyComplexItem(_offlineVehicle(), QString() /* kmlFile */, this /* parent */);
     _mapPolygon = _surveyItem->surveyAreaPolygon();
     _mapPolygon->appendVertices(_polyVertices);
 

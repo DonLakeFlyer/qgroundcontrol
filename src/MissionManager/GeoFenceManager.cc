@@ -17,17 +17,15 @@
 
 QGC_LOGGING_CATEGORY(GeoFenceManagerLog, "GeoFenceManagerLog")
 
-GeoFenceManager::GeoFenceManager(Vehicle* vehicle)
-    : PlanManager       (vehicle, MAV_MISSION_TYPE_FENCE)
+GeoFenceManager::GeoFenceManager(Vehicle* vehicle, QObject* parent)
+    : PlanManager       (vehicle, MAV_MISSION_TYPE_FENCE, parent)
 #if defined(QGC_AIRMAP_ENABLED)
     , _airspaceManager  (qgcApp()->toolbox()->airspaceManager())
 #endif
 {
-    connect(this, &PlanManager::inProgressChanged,          this, &GeoFenceManager::inProgressChanged);
-    connect(this, &PlanManager::error,                      this, &GeoFenceManager::error);
-    connect(this, &PlanManager::removeAllComplete,          this, &GeoFenceManager::removeAllComplete);
-    connect(this, &PlanManager::sendComplete,               this, &GeoFenceManager::_sendComplete);
-    connect(this, &PlanManager::newMissionItemsAvailable,   this, &GeoFenceManager::_planManagerLoadComplete);
+    connect(this, &PlanManager::_removeAllComplete, this, &GeoFenceManager::_managerRemoveAllComplete);
+    connect(this, &PlanManager::_sendComplete,      this, &GeoFenceManager::_managerSendComplete);
+    connect(this, &PlanManager::_loadComplete,      this, &GeoFenceManager::_managerLoadComplete);
 }
 
 GeoFenceManager::~GeoFenceManager()
@@ -108,21 +106,10 @@ void GeoFenceManager::sendToVehicle(const QGeoCoordinate&   breachReturn,
     writeMissionItems(fenceItems);
 }
 
-void GeoFenceManager::removeAll(void)
-{
-    _polygons.clear();
-    _circles.clear();
-    _breachReturnPoint = QGeoCoordinate();
-
-    PlanManager::removeAll();
-}
-
-void GeoFenceManager::_sendComplete(bool error)
+void GeoFenceManager::_managerSendComplete(bool error)
 {
     if (error) {
-        _polygons.clear();
-        _circles.clear();
-        _breachReturnPoint = QGeoCoordinate();
+        _clear();
     } else {
         _polygons = _sendPolygons;
         _circles = _sendCircles;
@@ -132,11 +119,9 @@ void GeoFenceManager::_sendComplete(bool error)
     emit sendComplete(error);
 }
 
-void GeoFenceManager::_planManagerLoadComplete(bool removeAllRequested)
+void GeoFenceManager::_managerLoadComplete(bool error)
 {
     bool loadFailed = false;
-
-    Q_UNUSED(removeAllRequested);
 
     _polygons.clear();
     _circles.clear();
@@ -158,11 +143,13 @@ void GeoFenceManager::_planManagerLoadComplete(bool removeAllRequested)
                 expectedCommand = command;
             } else if (expectedVertexCount != item->param1()){
                 // In the middle of a polygon, but count suddenly changed
-                emit error(BadPolygonItemFormat, tr("GeoFence load: Vertex count change mid-polygon - actual:expected").arg(item->param1()).arg(expectedVertexCount));
+                _displayError(BadPolygonItemFormat, tr("GeoFence load: Vertex count change mid-polygon - actual:expected").arg(item->param1()).arg(expectedVertexCount));
+                loadFailed = true;
                 break;
             } if (expectedCommand != command) {
                 // Command changed before last polygon was completely loaded
-                emit error(BadPolygonItemFormat, tr("GeoFence load: Polygon type changed before last load complete - actual:expected").arg(command).arg(expectedCommand));
+                _displayError(BadPolygonItemFormat, tr("GeoFence load: Polygon type changed before last load complete - actual:expected").arg(command).arg(expectedCommand));
+                loadFailed = true;
                 break;
             }
             nextPolygon.appendVertex(QGeoCoordinate(item->param5(), item->param6()));
@@ -175,7 +162,8 @@ void GeoFenceManager::_planManagerLoadComplete(bool removeAllRequested)
         } else if (command == MAV_CMD_NAV_FENCE_CIRCLE_INCLUSION || command == MAV_CMD_NAV_FENCE_CIRCLE_EXCLUSION) {
             if (nextPolygon.count() != 0) {
                 // Incomplete polygon
-                emit error(IncompletePolygonLoad, tr("GeoFence load: Incomplete polygon loaded"));
+                _displayError(IncompletePolygonLoad, tr("GeoFence load: Incomplete polygon loaded"));
+                loadFailed = true;
                 break;
             }
             QGCFenceCircle circle(QGeoCoordinate(item->param5(), item->param6()), item->param1(), command == MAV_CMD_NAV_FENCE_CIRCLE_INCLUSION /* inclusion */);
@@ -183,21 +171,41 @@ void GeoFenceManager::_planManagerLoadComplete(bool removeAllRequested)
         } else if (command == MAV_CMD_NAV_FENCE_RETURN_POINT) {
             _breachReturnPoint = QGeoCoordinate(item->param5(), item->param6(), item->param7());
         } else {
-            emit error(UnsupportedCommand, tr("GeoFence load: Unsupported command %1").arg(item->command()));
+            _displayError(UnsupportedCommand, tr("GeoFence load: Unsupported command %1").arg(item->command()));
+            loadFailed = true;
             break;
         }
     }
 
     if (loadFailed) {
-        _polygons.clear();
-        _circles.clear();
-        _breachReturnPoint = QGeoCoordinate();
+        _clear();
     }
 
-    emit loadComplete();
+    emit loadComplete(error || loadFailed);
+}
+
+void GeoFenceManager::_managerRemoveAllComplete(bool error)
+{
+    if (!error) {
+        _clear();
+    }
+    emit removeAllComplete(error);
 }
 
 bool GeoFenceManager::supported(void) const
 {
     return (_vehicle->capabilityBits() & MAV_PROTOCOL_CAPABILITY_MISSION_FENCE) && (_vehicle->maxProtoVersion() >= 200);
+}
+
+void GeoFenceManager::_displayError(ErrorCode_t errorCode, const QString& errorString)
+{
+    qCWarning(GeoFenceManagerLog) << QStringLiteral("_displayError errorCode: %1 errorString: %2").arg(errorCode).arg(errorString);
+    qgcApp()->showAppMessage(tr("%1 transfer failed. Error: %2").arg(_planTypeToString()).arg(errorString));
+}
+
+void GeoFenceManager::_clear(void)
+{
+    _polygons.clear();
+    _circles.clear();
+    _breachReturnPoint = QGeoCoordinate();
 }

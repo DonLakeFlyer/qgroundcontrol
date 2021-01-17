@@ -19,16 +19,13 @@ void TransectStyleComplexItemTestBase::init(void)
     UnitTest::init();
 
     _planViewSettings = qgcApp()->toolbox()->settingsManager()->planViewSettings();
-    _masterController = new PlanMasterController(this);
-    _controllerVehicle = _masterController->controllerVehicle();
+    _masterController = _offlineVehicle()->planMasterController();
 }
 
 void TransectStyleComplexItemTestBase::cleanup(void)
 {
-    delete _masterController;
     _planViewSettings = nullptr;
     _masterController = nullptr;
-    _controllerVehicle = nullptr;
     UnitTest::cleanup();
 }
 

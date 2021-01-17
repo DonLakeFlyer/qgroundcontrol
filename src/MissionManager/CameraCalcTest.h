@@ -52,7 +52,6 @@ private:
     const char*         _rgSignals[_cSignals];
 
     PlanMasterController*   _masterController =     nullptr;
-    Vehicle*                _controllerVehicle =    nullptr;
     MultiSignalSpy*         _multiSpy =             nullptr;
     CameraCalc*             _cameraCalc =           nullptr;
 };

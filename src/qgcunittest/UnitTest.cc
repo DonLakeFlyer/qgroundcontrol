@@ -100,6 +100,7 @@ void UnitTest::init(void)
     AppSettings* appSettings = qgcApp()->toolbox()->settingsManager()->appSettings();
     appSettings->offlineEditingFirmwareClass()->setRawValue(appSettings->offlineEditingFirmwareClass()->rawDefaultValue());
     appSettings->offlineEditingVehicleClass()->setRawValue(appSettings->offlineEditingVehicleClass()->rawDefaultValue());
+    qgcApp()->toolbox()->multiVehicleManager()->_resetOfflineVehicle();
     
     _messageBoxRespondedTo = false;
     _missedMessageBoxCount = 0;
@@ -394,8 +395,8 @@ void UnitTest::_connectMockLink(MAV_AUTOPILOT autopilot)
 
     if (autopilot != MAV_AUTOPILOT_INVALID) {
         // Wait for initial connect sequence to complete
-        QSignalSpy spyPlan(_vehicle, &Vehicle::initialConnectComplete);
-        QCOMPARE(spyPlan.wait(30000), true);
+        QSignalSpy spy(_vehicle, &Vehicle::initialConnectComplete);
+        QCOMPARE(spy.wait(30000), true);
     }
 }
 
@@ -524,4 +525,9 @@ bool UnitTest::fuzzyCompareLatLon(const QGeoCoordinate& coord1, const QGeoCoordi
 QGeoCoordinate UnitTest::changeCoordinateValue(const QGeoCoordinate& coordinate)
 {
     return coordinate.atDistanceAndAzimuth(1, 0);
+}
+
+Vehicle* UnitTest::_offlineVehicle(void)
+{
+    return qgcApp()->toolbox()->multiVehicleManager()->offlineEditingVehicle();
 }

@@ -17,11 +17,15 @@
 
 QGC_LOGGING_CATEGORY(MissionManagerLog, "MissionManagerLog")
 
-MissionManager::MissionManager(Vehicle* vehicle)
-    : PlanManager               (vehicle, MAV_MISSION_TYPE_MISSION)
+MissionManager::MissionManager(Vehicle* vehicle, QObject* parent)
+    : PlanManager               (vehicle, MAV_MISSION_TYPE_MISSION, parent)
     , _cachedLastCurrentIndex   (-1)
 {
     connect(_vehicle, &Vehicle::mavlinkMessageReceived, this, &MissionManager::_mavlinkMessageReceived);
+
+    connect(this, &PlanManager::_removeAllComplete, this, &MissionManager::removeAllComplete);
+    connect(this, &PlanManager::_sendComplete,      this, &MissionManager::sendComplete);
+    connect(this, &PlanManager::_loadComplete,      this, &MissionManager::loadComplete);
 }
 
 MissionManager::~MissionManager()
@@ -86,8 +90,8 @@ void MissionManager::generateResumeMission(int resumeIndex)
         return;
     }
 
-    for (int i=0; i<_missionItems.count(); i++) {
-        MissionItem* item = _missionItems[i];
+    for (int i=0; i<_missionItemsOnVehicle.count(); i++) {
+        MissionItem* item = _missionItemsToSend[i];
         if (item->command() == MAV_CMD_DO_JUMP) {
             qgcApp()->showAppMessage(tr("Unable to generate resume mission due to MAV_CMD_DO_JUMP command."));
             return;
@@ -95,14 +99,14 @@ void MissionManager::generateResumeMission(int resumeIndex)
     }
 
     // Be anal about crap input
-    resumeIndex = qMax(0, qMin(resumeIndex, _missionItems.count() - 1));
+    resumeIndex = qMax(0, qMin(resumeIndex, _missionItemsOnVehicle.count() - 1));
 
     // Adjust resume index to be a location based command
-    const MissionCommandUIInfo* uiInfo = qgcApp()->toolbox()->missionCommandTree()->getUIInfo(_vehicle, QGCMAVLink::VehicleClassGeneric, _missionItems[resumeIndex]->command());
+    const MissionCommandUIInfo* uiInfo = qgcApp()->toolbox()->missionCommandTree()->getUIInfo(_vehicle, QGCMAVLink::VehicleClassGeneric, _missionItemsToSend[resumeIndex]->command());
     if (!uiInfo || uiInfo->isStandaloneCoordinate() || !uiInfo->specifiesCoordinate()) {
         // We have to back up to the last command which the vehicle flies through
         while (--resumeIndex > 0) {
-            uiInfo = qgcApp()->toolbox()->missionCommandTree()->getUIInfo(_vehicle, QGCMAVLink::VehicleClassGeneric, _missionItems[resumeIndex]->command());
+            uiInfo = qgcApp()->toolbox()->missionCommandTree()->getUIInfo(_vehicle, QGCMAVLink::VehicleClassGeneric, _missionItemsToSend[resumeIndex]->command());
             if (uiInfo && (uiInfo->specifiesCoordinate() && !uiInfo->isStandaloneCoordinate())) {
                 // Found it
                 break;
@@ -136,8 +140,8 @@ void MissionManager::generateResumeMission(int resumeIndex)
     bool addHomePosition = _vehicle->firmwarePlugin()->sendHomePositionToVehicle();
 
     int prefixCommandCount = 0;
-    for (int i=0; i<_missionItems.count(); i++) {
-        MissionItem* oldItem = _missionItems[i];
+    for (int i=0; i<_missionItemsOnVehicle.count(); i++) {
+        MissionItem* oldItem = _missionItemsToSend[i];
         if ((i == 0 && addHomePosition) || i >= resumeIndex || includedResumeCommands.contains(oldItem->command())) {
             if (i < resumeIndex) {
                 prefixCommandCount++;
@@ -209,9 +213,9 @@ void MissionManager::generateResumeMission(int resumeIndex)
     resumeMission[setCurrentIndex]->setIsCurrentItem(true);
 
     // Send to vehicle
-    _clearAndDeleteWriteMissionItems();
+    _clearAndDeleteMissionItemsToSend();
     for (int i=0; i<resumeMission.count(); i++) {
-        _writeMissionItems.append(new MissionItem(*resumeMission[i], this));
+        _missionItemsToSend.append(new MissionItem(*resumeMission[i], this));
     }
     _resumeMission = true;
     _writeMissionItemsWorker();

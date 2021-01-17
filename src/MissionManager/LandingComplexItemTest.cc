@@ -26,7 +26,7 @@ void LandingComplexItemTest::init(void)
 {
     VisualMissionItemTest::init();
 
-    _item = new SimpleLandingComplexItem(_masterController, false /* flyView */, this);
+    _item = new SimpleLandingComplexItem(_offlineVehicle(), this);
 
     // Start in a clean state
     QVERIFY(!_item->dirty());
@@ -48,9 +48,9 @@ void LandingComplexItemTest::init(void)
     _multiSpy = new MultiSignalSpy();
     QCOMPARE(_multiSpy->init(_item, rgSignals, cSignals), true);
 
-    _validStopVideoItem     = CameraSectionTest::createValidStopTimeItem(_masterController, this);
-    _validStopDistanceItem  = CameraSectionTest::createValidStopTimeItem(_masterController, this);
-    _validStopTimeItem      = CameraSectionTest::createValidStopTimeItem(_masterController, this);
+    _validStopVideoItem     = CameraSectionTest::createValidStopTimeItem(this);
+    _validStopDistanceItem  = CameraSectionTest::createValidStopTimeItem(this);
+    _validStopTimeItem      = CameraSectionTest::createValidStopTimeItem(this);
 }
 
 void LandingComplexItemTest::cleanup(void)
@@ -187,7 +187,7 @@ void LandingComplexItemTest::_testAppendSectionItems(void)
         // Convert to simple visual items for verification
         QmlObjectListModel* simpleItems = new QmlObjectListModel(this);
         for (MissionItem* item: rgMissionItems) {
-            SimpleMissionItem* simpleItem = new SimpleMissionItem(_masterController, false /* flyView */, false /* forLoad */, simpleItems);
+            SimpleMissionItem* simpleItem = new SimpleMissionItem(_offlineVehicle(), false /* forLoad */, simpleItems);
             simpleItem->missionItem() = *item;
             simpleItems->append(simpleItem);
         }
@@ -238,12 +238,12 @@ void LandingComplexItemTest::_testScanForItems(void)
         // Convert to simple visual items for _scan
         QmlObjectListModel* visualItems = new QmlObjectListModel(this);
         for (MissionItem* item: rgMissionItems) {
-            SimpleMissionItem* simpleItem = new SimpleMissionItem(_masterController, false /* flyView */, false /* forLoad */, visualItems);
+            SimpleMissionItem* simpleItem = new SimpleMissionItem(_offlineVehicle(), false /* forLoad */, visualItems);
             simpleItem->missionItem() = *item;
             visualItems->append(simpleItem);
         }
 
-        QVERIFY(LandingComplexItem::_scanForItem(visualItems, false /* flyView */, _masterController, &SimpleLandingComplexItem::_isValidLandItem, &SimpleLandingComplexItem::_createItem));
+        QVERIFY(LandingComplexItem::_scanForItem(visualItems, _masterController->vehicle(), &SimpleLandingComplexItem::_isValidLandItem, &SimpleLandingComplexItem::_createItem));
         QCOMPARE(visualItems->count(), 1);
         SimpleLandingComplexItem* scannedItem = visualItems->value<SimpleLandingComplexItem*>(0);
         QVERIFY(scannedItem);
@@ -265,7 +265,7 @@ void LandingComplexItemTest::_testSaveLoad(void)
     saveObject[ComplexMissionItem::jsonComplexItemTypeKey]  = SimpleLandingComplexItem::jsonComplexItemTypeValue;
 
     // Test useDeprecatedRelAltKeys = false
-    SimpleLandingComplexItem* newItem = new SimpleLandingComplexItem(_masterController, false /* flyView */, this /* parent */);
+    SimpleLandingComplexItem* newItem = new SimpleLandingComplexItem(_offlineVehicle(), this /* parent */);
     bool loadSuccess = newItem->_load(saveObject, 0 /* sequenceNumber */, SimpleLandingComplexItem::jsonComplexItemTypeValue, false /* useDeprecatedRelAltKeys */, errorString);
     if (!loadSuccess) {
         qDebug() << "_load failed" << errorString;
@@ -280,7 +280,7 @@ void LandingComplexItemTest::_testSaveLoad(void)
     saveObject[LandingComplexItem::_jsonDeprecatedLoiterAltitudeRelativeKey] = relAlt;
     saveObject[LandingComplexItem::_jsonDeprecatedLandingAltitudeRelativeKey] = relAlt;
     saveObject.remove(LandingComplexItem::_jsonAltitudesAreRelativeKey);
-    newItem = new SimpleLandingComplexItem(_masterController, false /* flyView */, this /* parent */);
+    newItem = new SimpleLandingComplexItem(_offlineVehicle(), this /* parent */);
     loadSuccess = newItem->_load(saveObject, 0 /* sequenceNumber */, SimpleLandingComplexItem::jsonComplexItemTypeValue, true /* useDeprecatedRelAltKeys */, errorString);
     if (!loadSuccess) {
         qDebug() << "_load failed" << errorString;
@@ -297,7 +297,7 @@ void LandingComplexItemTest::_testSaveLoad(void)
     saveObject[ComplexMissionItem::jsonComplexItemTypeKey]              = SimpleLandingComplexItem::jsonComplexItemTypeValue;
     saveObject[LandingComplexItem::_jsonDeprecatedLoiterCoordinateKey]  = saveObject[LandingComplexItem::_jsonFinalApproachCoordinateKey];
     saveObject.remove(LandingComplexItem::_jsonFinalApproachCoordinateKey);
-    newItem = new SimpleLandingComplexItem(_masterController, false /* flyView */, this /* parent */);
+    newItem = new SimpleLandingComplexItem(_offlineVehicle(), this /* parent */);
     loadSuccess = newItem->_load(saveObject, 0 /* sequenceNumber */, SimpleLandingComplexItem::jsonComplexItemTypeValue, false /* useDeprecatedRelAltKeys */, errorString);
     if (!loadSuccess) {
         qDebug() << "_load failed" << errorString;
@@ -331,8 +331,8 @@ void LandingComplexItemTest::_validateItem(LandingComplexItem* actualItem, Landi
     }
 }
 
-SimpleLandingComplexItem::SimpleLandingComplexItem(PlanMasterController* masterController, bool flyView, QObject* parent)
-    : LandingComplexItem        (masterController, flyView, parent)
+SimpleLandingComplexItem::SimpleLandingComplexItem(Vehicle* vehicle, QObject* parent)
+    : LandingComplexItem        (vehicle, parent)
     , _metaDataMap              (FactMetaData::createMapFromJsonFile(QStringLiteral(":/json/VTOLLandingPattern.FactMetaData.json"), this))
     , _landingDistanceFact      (settingsGroup, _metaDataMap[finalApproachToLandDistanceName])
     , _finalApproachAltitudeFact(settingsGroup, _metaDataMap[finalApproachAltitudeName])
@@ -399,5 +399,5 @@ void SimpleLandingComplexItem::_updateFlightPathSegmentsDontCallDirectly(void)
         emit terrainCollisionChanged(true);
     }
 
-    _masterController->missionController()->recalcTerrainProfile();
+    _vehicle->planMasterController()->missionController()->recalcTerrainProfile();
 }

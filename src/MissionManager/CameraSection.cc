@@ -23,8 +23,8 @@ const char* CameraSection::_cameraModeName =                    "CameraMode";
 
 QMap<QString, FactMetaData*> CameraSection::_metaDataMap;
 
-CameraSection::CameraSection(PlanMasterController* masterController, QObject* parent)
-    : Section                           (masterController, parent)
+CameraSection::CameraSection(Vehicle* vehicle, QObject* parent)
+    : Section                           (vehicle, parent)
     , _available                        (false)
     , _settingsSpecified                (false)
     , _specifyGimbal                    (false)
@@ -580,7 +580,7 @@ void CameraSection::_cameraActionChanged(void)
 
 bool CameraSection::cameraModeSupported(void) const
 {
-    return _specifyCameraMode || _masterController->controllerVehicle()->firmwarePlugin()->supportedMissionCommands(QGCMAVLink::VehicleClassGeneric).contains(MAV_CMD_SET_CAMERA_MODE);
+    return _specifyCameraMode || _vehicle->firmwarePlugin()->supportedMissionCommands(QGCMAVLink::VehicleClassGeneric).contains(MAV_CMD_SET_CAMERA_MODE);
 }
 
 void CameraSection::_dirtyIfSpecified(void)

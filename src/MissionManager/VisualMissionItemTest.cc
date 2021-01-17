@@ -21,8 +21,7 @@ void VisualMissionItemTest::init(void)
 {
     UnitTest::init();
 
-    _masterController = new PlanMasterController(MAV_AUTOPILOT_PX4, MAV_TYPE_QUADROTOR, this);
-    _controllerVehicle = _masterController->controllerVehicle();
+    _masterController = _offlineVehicle()->planMasterController();
 
     rgVisualItemSignals[altDifferenceChangedIndex] =                        SIGNAL(altDifferenceChanged(double));
     rgVisualItemSignals[altPercentChangedIndex] =                           SIGNAL(altPercentChanged(double));
@@ -52,7 +51,7 @@ void VisualMissionItemTest::init(void)
 void VisualMissionItemTest::cleanup(void)
 {
     UnitTest::cleanup();
-    _masterController->deleteLater();
+    _masterController = nullptr;
 }
 
 void VisualMissionItemTest::_createSpy(VisualMissionItem* visualItem, MultiSignalSpy** visualSpy)

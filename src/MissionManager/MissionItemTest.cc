@@ -35,12 +35,11 @@ MissionItemTest::MissionItemTest(void)
 void MissionItemTest::init(void)
 {
     UnitTest::init();
-    _masterController = new PlanMasterController(this);
+    _masterController = _offlineVehicle()->planMasterController();
 }
 
 void MissionItemTest::cleanup(void)
 {
-    _masterController->deleteLater();
     UnitTest::cleanup();
 }
 
@@ -278,7 +277,7 @@ void MissionItemTest::_testSimpleLoadFromStream(void)
 {
     // We specifically test SimpleMissionItem loading as well since it has additional
     // signalling which can affect values.
-    SimpleMissionItem simpleMissionItem(_masterController, false /* flyView */, false /* forLoad */, nullptr);
+    SimpleMissionItem simpleMissionItem(_offlineVehicle(), false /* forLoad */, nullptr);
 
     QString testString("10\t0\t3\t80\t10\t20\t30\t40\t-10\t-20\t-30\t1\r\n");
     QTextStream testStream(&testString, QIODevice::ReadOnly);
@@ -448,7 +447,7 @@ void MissionItemTest::_testSimpleLoadFromJson(void)
     // We specifically test SimpleMissionItem loading as well since it has additional
     // signalling which can affect values.
 
-    SimpleMissionItem simpleMissionItem(_masterController, false /* flyView */, false /* forLoad */, nullptr);
+    SimpleMissionItem simpleMissionItem(_offlineVehicle(), false /* forLoad */, nullptr);
     QString     errorString;
     QJsonArray  coordinateArray;
     QJsonObject jsonObject;

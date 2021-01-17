@@ -26,14 +26,11 @@ void PlanMasterControllerTest::init(void)
 {
     UnitTest::init();
 
-    _masterController = new PlanMasterController(this);
-    _masterController->setFlyView(false);
-    _masterController->start();
+    _masterController = _offlineVehicle()->planMasterController();
 }
 
 void PlanMasterControllerTest::cleanup(void)
 {
-    delete _masterController;
     _masterController = nullptr;
 
     UnitTest::cleanup();
@@ -41,13 +38,13 @@ void PlanMasterControllerTest::cleanup(void)
 
 void PlanMasterControllerTest::_testMissionFileLoad(void)
 {
-    _masterController->loadFromFile(":/unittest/OldFileFormat.mission");
+    _masterController->loadFromFileAndSendToVehicle(":/unittest/OldFileFormat.mission");
     QCOMPARE(_masterController->missionController()->visualItems()->count(), 7);
 }
 
 
 void PlanMasterControllerTest::_testMissionPlannerFileLoad(void)
 {
-    _masterController->loadFromFile(":/unittest/MissionPlanner.waypoints");
+    _masterController->loadFromFileAndSendToVehicle(":/unittest/MissionPlanner.waypoints");
     QCOMPARE(_masterController->missionController()->visualItems()->count(), 6);
 }

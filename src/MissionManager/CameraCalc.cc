@@ -27,9 +27,9 @@ const char* CameraCalc::adjustedFootprintSideName =         "AdjustedFootprintSi
 
 const char* CameraCalc::_jsonCameraSpecTypeKey =            "CameraSpecType";
 
-CameraCalc::CameraCalc(PlanMasterController* masterController, const QString& settingsGroup, QObject* parent)
+CameraCalc::CameraCalc(Vehicle* vehicle, const QString& settingsGroup, QObject* parent)
     : CameraSpec                    (settingsGroup, parent)
-    , _knownCameraList              (masterController->controllerVehicle()->staticCameraList())
+    , _knownCameraList              (vehicle->staticCameraList())
     , _metaDataMap                  (FactMetaData::createMapFromJsonFile(QStringLiteral(":/json/CameraCalc.FactMetaData.json"), this))
     , _cameraNameFact               (settingsGroup, _metaDataMap[cameraNameName])
     , _valueSetIsDistanceFact       (settingsGroup, _metaDataMap[valueSetIsDistanceName])

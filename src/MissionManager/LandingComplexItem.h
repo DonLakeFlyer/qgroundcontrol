@@ -16,7 +16,7 @@
 
 Q_DECLARE_LOGGING_CATEGORY(LandingComplexItemLog)
 
-class PlanMasterController;
+class Vehicle;
 class LandingComplexItemTest;
 
 // Base class for landing patterns complex items.
@@ -25,7 +25,7 @@ class LandingComplexItem : public ComplexMissionItem
     Q_OBJECT
 
 public:
-    LandingComplexItem(PlanMasterController* masterController, bool flyView, QObject* parent);
+    LandingComplexItem(Vehicle* vehicle, QObject* parent);
 
     Q_PROPERTY(Fact*            finalApproachAltitude   READ    finalApproachAltitude                                           CONSTANT)
     Q_PROPERTY(Fact*            loiterRadius            READ    loiterRadius                                                    CONSTANT)
@@ -155,9 +155,9 @@ protected:
     bool            _load                   (const QJsonObject& complexObject, int sequenceNumber, const QString& jsonComplexItemTypeValue, bool useDeprecatedRelAltKeys, QString& errorString);
 
     typedef bool                (*IsLandItemFunc)(const MissionItem& missionItem);
-    typedef LandingComplexItem* (*CreateItemFunc)(PlanMasterController* masterController, bool flyView, QObject* parent);
+    typedef LandingComplexItem* (*CreateItemFunc)(Vehicle* vehicle, QObject* parent);
 
-    static bool _scanForItem(QmlObjectListModel* visualItems, bool flyView, PlanMasterController* masterController, IsLandItemFunc isLandItemFunc, CreateItemFunc createItemFunc);
+    static bool _scanForItem(QmlObjectListModel* visualItems, Vehicle* vehicle, IsLandItemFunc isLandItemFunc, CreateItemFunc createItemFunc);
 
     int             _sequenceNumber             = 0;
     bool            _dirty                      = false;

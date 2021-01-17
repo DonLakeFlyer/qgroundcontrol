@@ -19,6 +19,7 @@ FirstRunPrompt                          1.0 FirstRunPrompt.qml
 FileButton                              1.0 FileButton.qml
 FlightModeDropdown                      1.0 FlightModeDropdown.qml
 FlightModeMenu                          1.0 FlightModeMenu.qml
+FlightPlanPanel                         1.0 FlightPlanPanel.qml
 GeoFenceEditor                          1.0 GeoFenceEditor.qml
 GeoFenceMapVisuals                      1.0 GeoFenceMapVisuals.qml
 HackFileDialog                          1.0 HackFileDialog.qml

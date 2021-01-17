@@ -50,8 +50,8 @@ const char* LandingComplexItem::_jsonDeprecatedLoiterAltitudeRelativeKey    = "l
 // the new support for using either a loiter or just a waypoint as the approach entry point.
 const char* LandingComplexItem::_jsonDeprecatedLoiterCoordinateKey          = "loiterCoordinate";
 
-LandingComplexItem::LandingComplexItem(PlanMasterController* masterController, bool flyView, QObject* parent)
-    : ComplexMissionItem        (masterController, flyView, parent)
+LandingComplexItem::LandingComplexItem(Vehicle* vehicle, QObject* parent)
+    : ComplexMissionItem(vehicle, parent)
 {
     _isIncomplete = false;
 
@@ -62,7 +62,7 @@ LandingComplexItem::LandingComplexItem(PlanMasterController* masterController, b
 
 void LandingComplexItem::_init(void)
 {
-    if (_masterController->controllerVehicle()->apmFirmware()) {
+    if (_vehicle->apmFirmware()) {
         // ArduPilot does not support camera commands
         stopTakingVideo()->setRawValue(false);
         stopTakingPhotos()->setRawValue(false);
@@ -98,8 +98,8 @@ void LandingComplexItem::_init(void)
 
     connect(this,                       &LandingComplexItem::altitudesAreRelativeChanged,   this, &LandingComplexItem::_amslEntryAltChanged);
     connect(this,                       &LandingComplexItem::altitudesAreRelativeChanged,   this, &LandingComplexItem::_amslExitAltChanged);
-    connect(_missionController,         &MissionController::plannedHomePositionChanged,     this, &LandingComplexItem::_amslEntryAltChanged);
-    connect(_missionController,         &MissionController::plannedHomePositionChanged,     this, &LandingComplexItem::_amslExitAltChanged);
+    connect(_vehicle,                   &Vehicle::homePositionChanged,                      this, &LandingComplexItem::_amslEntryAltChanged);
+    connect(_vehicle,                   &Vehicle::homePositionChanged,                      this, &LandingComplexItem::_amslExitAltChanged);
     connect(finalApproachAltitude(),    &Fact::valueChanged,                                this, &LandingComplexItem::_amslEntryAltChanged);
     connect(landingAltitude(),          &Fact::valueChanged,                                this, &LandingComplexItem::_amslExitAltChanged);
     connect(this,                       &LandingComplexItem::amslEntryAltChanged,           this, &LandingComplexItem::maxAMSLAltitudeChanged);
@@ -118,7 +118,7 @@ void LandingComplexItem::_init(void)
     connect(finalApproachAltitude(),    &Fact::valueChanged,                                this, &LandingComplexItem::_updateFlightPathSegmentsSignal);
     connect(landingAltitude(),          &Fact::valueChanged,                                this, &LandingComplexItem::_updateFlightPathSegmentsSignal);
     connect(this,                       &LandingComplexItem::altitudesAreRelativeChanged,   this, &LandingComplexItem::_updateFlightPathSegmentsSignal);
-    connect(_missionController,         &MissionController::plannedHomePositionChanged,     this, &LandingComplexItem::_updateFlightPathSegmentsSignal);
+    connect(_vehicle,                   &Vehicle::homePositionChanged,                      this, &LandingComplexItem::_updateFlightPathSegmentsSignal);
 
     connect(finalApproachAltitude(),    &Fact::valueChanged,                                this, &LandingComplexItem::_updateFinalApproachCoodinateAltitudeFromFact);
     connect(landingAltitude(),          &Fact::valueChanged,                                this, &LandingComplexItem::_updateLandingCoodinateAltitudeFromFact);
@@ -126,7 +126,7 @@ void LandingComplexItem::_init(void)
 
 void LandingComplexItem::setLandingHeadingToTakeoffHeading()
 {
-    TakeoffMissionItem* takeoffMissionItem = _missionController->takeoffMissionItem();
+    TakeoffMissionItem* takeoffMissionItem = _vehicle->planMasterController()->missionController()->takeoffMissionItem();
     if (takeoffMissionItem && takeoffMissionItem->specifiesCoordinate()) {
         qreal heading = takeoffMissionItem->launchCoordinate().azimuthTo(takeoffMissionItem->coordinate());
         landingHeading()->setRawValue(heading);
@@ -377,7 +377,7 @@ MissionItem* LandingComplexItem::_createFinalApproachItem(int seqNum, QObject* p
     }
 }
 
-bool LandingComplexItem::_scanForItem(QmlObjectListModel* visualItems, bool flyView, PlanMasterController* masterController, IsLandItemFunc isLandItemFunc, CreateItemFunc createItemFunc)
+bool LandingComplexItem::_scanForItem(QmlObjectListModel* visualItems, Vehicle* vehicle, IsLandItemFunc isLandItemFunc, CreateItemFunc createItemFunc)
 {
     qCDebug(LandingComplexItemLog) << "VTOLLandingComplexItem::scanForItem count" << visualItems->count();
 
@@ -479,7 +479,7 @@ bool LandingComplexItem::_scanForItem(QmlObjectListModel* visualItems, bool flyV
 
     // Now stuff all the scanned information into the item
 
-    LandingComplexItem* complexItem = createItemFunc(masterController, flyView, visualItems /* parent */);
+    LandingComplexItem* complexItem = createItemFunc(vehicle, visualItems /* parent */);
 
     complexItem->_ignoreRecalcSignals = true;
 
@@ -546,12 +546,12 @@ void LandingComplexItem::setSequenceNumber(int sequenceNumber)
 
 double LandingComplexItem::amslEntryAlt(void) const
 {
-    return finalApproachAltitude()->rawValue().toDouble() + (_altitudesAreRelative ? _missionController->plannedHomePosition().altitude() : 0);
+    return finalApproachAltitude()->rawValue().toDouble() + (_altitudesAreRelative ? _vehicle->homePosition().altitude() : 0);
 }
 
 double LandingComplexItem::amslExitAlt(void) const
 {
-    return landingAltitude()->rawValue().toDouble() + (_altitudesAreRelative ? _missionController->plannedHomePosition().altitude() : 0);
+    return landingAltitude()->rawValue().toDouble() + (_altitudesAreRelative ? _vehicle->homePosition().altitude() : 0);
 
 }
 

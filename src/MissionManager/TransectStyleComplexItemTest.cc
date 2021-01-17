@@ -18,7 +18,7 @@ void TransectStyleComplexItemTest::init(void)
 {
     TransectStyleComplexItemTestBase::init();
 
-    _transectStyleItem = new TestTransectStyleItem(_masterController, this);
+    _transectStyleItem = new TestTransectStyleItem(_offlineVehicle(), this);
     _transectStyleItem->cameraTriggerInTurnAround()->setRawValue(false);
     _transectStyleItem->cameraCalc()->setCameraBrand(CameraCalc::canonicalManualCameraName());
     _transectStyleItem->cameraCalc()->valueSetIsDistance()->setRawValue(true);
@@ -246,8 +246,8 @@ void TransectStyleComplexItemTest::_testFollowTerrain(void)
     }
 }
 
-TestTransectStyleItem::TestTransectStyleItem(PlanMasterController* masterController, QObject* parent)
-    : TransectStyleComplexItem      (masterController, false /* flyView */, QStringLiteral("UnitTestTransect"), parent)
+TestTransectStyleItem::TestTransectStyleItem(Vehicle* vehicle, QObject* parent)
+    : TransectStyleComplexItem      (vehicle, QStringLiteral("UnitTestTransect"), parent)
     , rebuildTransectsPhase1Called  (false)
     , recalcComplexDistanceCalled   (false)
     , recalcCameraShotsCalled       (false)

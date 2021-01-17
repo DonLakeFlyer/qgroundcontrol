@@ -7,9 +7,7 @@
  *
  ****************************************************************************/
 
-
-#ifndef SimpleMissionItem_H
-#define SimpleMissionItem_H
+#pragma once
 
 #include "VisualMissionItem.h"
 #include "MissionItem.h"
@@ -24,8 +22,8 @@ class SimpleMissionItem : public VisualMissionItem
     Q_OBJECT
     
 public:
-    SimpleMissionItem(PlanMasterController* masterController, bool flyView, bool forLoad, QObject* parent);
-    SimpleMissionItem(PlanMasterController* masterController, bool flyView, const MissionItem& missionItem, QObject* parent);
+    SimpleMissionItem(Vehicle* vehicle, bool forLoad, QObject* parent);
+    SimpleMissionItem(Vehicle* vehicle, const MissionItem& missionItem, QObject* parent);
 
     ~SimpleMissionItem();
 
@@ -55,9 +53,8 @@ public:
     /// Scans the loaded items for additional section settings
     ///     @param visualItems List of all visual items
     ///     @param scanIndex Index to start scanning from
-    ///     @param vehicle Vehicle associated with this mission
     /// @return true: section found, scanIndex updated
-    bool scanForSections(QmlObjectListModel* visualItems, int scanIndex, PlanMasterController* masterController);
+    bool scanForSections(QmlObjectListModel* visualItems, int scanIndex);
 
     // Property accesors
     
@@ -202,5 +199,3 @@ private:
     static const char* _jsonAltitudeKey;
     static const char* _jsonAMSLAltAboveTerrainKey;
 };
-
-#endif

@@ -29,8 +29,8 @@ const char* FixedWingLandingComplexItem::valueSetIsDistanceName             = "V
 
 const char* FixedWingLandingComplexItem::_jsonValueSetIsDistanceKey         = "valueSetIsDistance";
 
-FixedWingLandingComplexItem::FixedWingLandingComplexItem(PlanMasterController* masterController, bool flyView, QObject* parent)
-    : LandingComplexItem        (masterController, flyView, parent)
+FixedWingLandingComplexItem::FixedWingLandingComplexItem(Vehicle* vehicle, QObject* parent)
+    : LandingComplexItem        (vehicle, parent)
     , _metaDataMap              (FactMetaData::createMapFromJsonFile(QStringLiteral(":/json/FWLandingPattern.FactMetaData.json"), this))
     , _landingDistanceFact      (settingsGroup, _metaDataMap[finalApproachToLandDistanceName])
     , _finalApproachAltitudeFact(settingsGroup, _metaDataMap[finalApproachAltitudeName])
@@ -154,9 +154,9 @@ bool FixedWingLandingComplexItem::_isValidLandItem(const MissionItem& missionIte
     }
 }
 
-bool FixedWingLandingComplexItem::scanForItem(QmlObjectListModel* visualItems, bool flyView, PlanMasterController* masterController)
+bool FixedWingLandingComplexItem::scanForItem(QmlObjectListModel* visualItems, Vehicle* vehicle)
 {
-    return _scanForItem(visualItems, flyView, masterController, _isValidLandItem, _createItem);
+    return _scanForItem(visualItems, vehicle, _isValidLandItem, _createItem);
 }
 
 // Never call this method directly. If you want to update the flight segments you emit _updateFlightPathSegmentsSignal()
@@ -181,5 +181,5 @@ void FixedWingLandingComplexItem::_updateFlightPathSegmentsDontCallDirectly(void
         emit terrainCollisionChanged(true);
     }
 
-    _masterController->missionController()->recalcTerrainProfile();
+    _vehicle->planMasterController()->missionController()->recalcTerrainProfile();
 }

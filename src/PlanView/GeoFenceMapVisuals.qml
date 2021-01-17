@@ -154,7 +154,6 @@ Item {
         }
     }
 
-
     // Breach return point
     Component {
         id: breachReturnPointComponent
