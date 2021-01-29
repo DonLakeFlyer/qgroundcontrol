@@ -370,6 +370,9 @@ void MultiVehicleManager::_sendGCSHeartbeat(void)
     // Send a heartbeat out on each link
     for (int i=0; i<sharedLinks.count(); i++) {
         LinkInterface* link = sharedLinks[i].get();
+        if (!link) {
+            continue;
+        }
         auto linkConfiguration = link->linkConfiguration();
         if (link->isConnected() && linkConfiguration && !linkConfiguration->isHighLatency()) {
             mavlink_message_t message;
