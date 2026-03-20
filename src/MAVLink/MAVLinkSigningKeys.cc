@@ -153,6 +153,21 @@ void MAVLinkSigningKeys::_save()
 void MAVLinkSigningKeys::_load()
 {
     QSettings settings;
+    bool migrated = false;
+
+    // Migrate old single signing key from the pre-named-keys Fact system.
+    // The old "mavlink2SigningKey" was stored as a raw passphrase at the QSettings root level.
+    if (settings.contains(kOldSigningKeySettingsKey)) {
+        const QString oldPassphrase = settings.value(kOldSigningKeySettingsKey).toString();
+        settings.remove(kOldSigningKeySettingsKey);
+        if (!oldPassphrase.isEmpty()) {
+            const QByteArray keyBytes = QCryptographicHash::hash(oldPassphrase.toUtf8(), QCryptographicHash::Sha256);
+            _keys->append(new MAVLinkSigningKey(QStringLiteral("Migrated Key"), keyBytes, _keys));
+            migrated = true;
+            qCDebug(MAVLinkSigningKeysLog) << "Migrated legacy signing key to named key system";
+        }
+    }
+
     settings.beginGroup(kSettingsGroup);
 
     const int count = settings.beginReadArray(kKeysArrayKey);
@@ -167,4 +182,8 @@ void MAVLinkSigningKeys::_load()
     settings.endArray();
 
     settings.endGroup();
+
+    if (migrated) {
+        _save();
+    }
 }

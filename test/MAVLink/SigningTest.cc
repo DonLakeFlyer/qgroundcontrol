@@ -4,6 +4,9 @@
 #include "MAVLinkSigningKeys.h"
 #include "QmlObjectListModel.h"
 
+#include <QtCore/QCryptographicHash>
+#include <QtCore/QSettings>
+
 void SigningTest::_testInitSigning()
 {
     // Create a 32-byte raw key
@@ -129,6 +132,45 @@ void SigningTest::_testTryDetectKey()
 
     // Clean up
     QVERIFY(MAVLinkSigning::initSigning(MAVLINK_COMM_3, QByteArrayView(), nullptr));
+    while (signingKeys->keys()->count() > 0) {
+        signingKeys->removeKey(0);
+    }
+}
+
+void SigningTest::_testMigrateLegacySigningKey()
+{
+    auto* signingKeys = MAVLinkSigningKeys::instance();
+
+    // Clean slate
+    while (signingKeys->keys()->count() > 0) {
+        signingKeys->removeKey(0);
+    }
+
+    // Simulate the old Fact-based signing key at the QSettings root level
+    const QString oldPassphrase = QStringLiteral("legacy-passphrase");
+    {
+        QSettings settings;
+        settings.setValue(QStringLiteral("mavlink2SigningKey"), oldPassphrase);
+        settings.sync();
+    }
+
+    // Trigger reload which should migrate the old key
+    signingKeys->_load();
+
+    // Verify migration created a key named "Migrated Key" with the correct SHA-256 hash
+    QCOMPARE(signingKeys->keys()->count(), 1);
+    QCOMPARE(signingKeys->keyNameAt(0), QStringLiteral("Migrated Key"));
+
+    const QByteArray expectedHash = QCryptographicHash::hash(oldPassphrase.toUtf8(), QCryptographicHash::Sha256);
+    QCOMPARE(signingKeys->keyBytesAt(0), expectedHash);
+
+    // Verify the old setting was removed
+    {
+        QSettings settings;
+        QVERIFY(!settings.contains(QStringLiteral("mavlink2SigningKey")));
+    }
+
+    // Clean up
     while (signingKeys->keys()->count() > 0) {
         signingKeys->removeKey(0);
     }
