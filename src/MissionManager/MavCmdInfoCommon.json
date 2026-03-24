@@ -284,6 +284,47 @@
         { "id": 32, "rawName": "MAV_CMD_DO_FOLLOW", "friendlyName": "Follow Me" },
         { "id": 33, "rawName": "MAV_CMD_DO_FOLLOW_REPOSITION", "friendlyName": "Vehicle reposition" },
         {
+            "id":                   36,
+            "rawName":              "MAV_CMD_NAV_ARC_WAYPOINT",
+            "friendlyName":         "Arc Waypoint",
+            "description":          "Travel to a position in 3D space along an arc path centered on another point.",
+            "specifiesCoordinate":  true,
+            "friendlyEdit":         true,
+            "category":             "Basic",
+            "param1": {
+                "label":            "Arc Radius",
+                "description":      "Radius of circular arc in meters",
+                "units":            "m",
+                "default":          0,
+                "decimalPlaces":    2,
+                "min":              0
+            },
+            "param2": {
+                "label":            "Center X",
+                "description":      "X offset from center point",
+                "units":            "m",
+                "default":          0,
+                "decimalPlaces":    2,
+                "advanced":        true
+            },
+            "param3": {
+                "label":            "Center Y",
+                "description":      "Y offset from center point",
+                "units":            "m",
+                "default":          0,
+                "decimalPlaces":    2,
+                "advanced":        true
+            },
+            "param4": {
+                "label":            "Direction",
+                "description":      "Arc direction, 0=clockwise from point, 1=counter-clockwise",
+                "enumStrings":      "Clockwise,Counter-clockwise",
+                "enumValues":       "0,1",
+                "default":          0,
+                "advanced":        true
+            }
+        },
+        {
             "id":                   81,
             "rawName":              "MAV_CMD_NAV_PATHPLANNING",
             "friendlyName":         "Path planning",
@@ -442,6 +483,23 @@
                 "max":              59,
                 "userMin":          -1,
                 "userMax":          59
+            }
+        },
+        {
+            "id":                   94,
+            "rawName":              "MAV_CMD_NAV_PAYLOAD_PLACE",
+            "friendlyName":         "Payload Place",
+            "description":          "Move to and place a payload at location. Vehicle will descend until payload is detected on ground, or maximum descent distance is reached.",
+            "specifiesCoordinate":  true,
+            "friendlyEdit":         true,
+            "category":             "Basic",
+            "param1": {
+                "label":            "Max Descent",
+                "description":      "Maximum distance to descend before releasing payload",
+                "units":            "m",
+                "default":          10,
+                "decimalPlaces":    1,
+                "min":              0
             }
         },
         {
@@ -762,9 +820,38 @@
             "category":             "Flight control"
         },
         { "id": 190, "rawName": "MAV_CMD_DO_RALLY_LAND", "friendlyName": "Rally land" },
-        { "id": 191, "rawName": "MAV_CMD_DO_GO_AROUND", "friendlyName": "Go around" },
+        {
+            "id":                   191,
+            "rawName":              "MAV_CMD_DO_GO_AROUND",
+            "friendlyName":         "Go Around",
+            "description":          "Initiate go-around. Vehicle will climb to specified altitude and continue mission.",
+            "specifiesCoordinate":  false,
+            "friendlyEdit":         true,
+            "category":             "Safety",
+            "param1": {
+                "label":            "Altitude",
+                "description":      "Altitude to climb to",
+                "units":            "m",
+                "default":          0,
+                "decimalPlaces":    1
+            }
+        },
         { "id": 192, "rawName": "MAV_CMD_DO_REPOSITION", "friendlyName": "Reposition" },
-        { "id": 193, "rawName": "MAV_CMD_DO_PAUSE_CONTINUE", "friendlyName": "Pause/Continue" },
+        {
+            "id":                   193,
+            "rawName":              "MAV_CMD_DO_PAUSE_CONTINUE",
+            "friendlyName":         "Pause/Continue",
+            "description":          "Pause mission execution or resume if paused.",
+            "specifiesCoordinate":  false,
+            "friendlyEdit":         true,
+            "category":             "Safety",
+            "param1": {
+                "label":            "Action",
+                "enumStrings":      "Continue,Pause",
+                "enumValues":       "0,1",
+                "default":          0
+            }
+        },
         {
             "id":                   194,
             "rawName":              "MAV_CMD_DO_SET_REVERSE",
@@ -1162,6 +1249,41 @@
                 "default":          1
             }
         },
+        {
+            "id":                   213,
+            "rawName":              "MAV_CMD_NAV_SET_YAW_SPEED",
+            "friendlyName":         "Set Yaw Speed",
+            "description":          "Set vehicle yaw angle and turn speed.",
+            "specifiesCoordinate":  false,
+            "friendlyEdit":         true,
+            "category":             "Guidance",
+            "param1": {
+                "label":            "Yaw Angle",
+                "description":      "Target yaw angle",
+                "units":            "deg",
+                "default":          0,
+                "decimalPlaces":    1,
+                "userMin":          0,
+                "userMax":          360
+            },
+            "param2": {
+                "label":            "Turn Speed",
+                "description":      "Speed of turn",
+                "units":            "m/s",
+                "default":          0,
+                "decimalPlaces":    1,
+                "min":              0,
+                "advanced":        true
+            },
+            "param3": {
+                "label":            "Angle Type",
+                "description":      "Type of angle (absolute or relative)",
+                "enumStrings":      "Absolute,Relative",
+                "enumValues":       "0,1",
+                "default":          0,
+                "advanced":        true
+            }
+        },
         { "id": 220, "rawName": "MAV_CMD_DO_MOUNT_CONTROL_QUAT" },
         { "id": 221, "rawName": "MAV_CMD_DO_GUIDED_MASTER" },
         {
@@ -1194,6 +1316,37 @@
                 "units":            "m",
                 "decimalPlaces":    2,
                 "min":              0
+            }
+        },
+        {
+            "id":                   223,
+            "rawName":              "MAV_CMD_DO_ENGINE_CONTROL",
+            "friendlyName":         "Engine Control",
+            "description":          "Control vehicle engine (start/stop and cold/warm start).",
+            "specifiesCoordinate":  false,
+            "friendlyEdit":         true,
+            "category":             "Safety",
+            "param1": {
+                "label":            "Start Engine",
+                "enumStrings":      "Stop,Start",
+                "enumValues":       "0,1",
+                "default":          0
+            },
+            "param2": {
+                "label":            "Start Type",
+                "enumStrings":      "Warm Start,Cold Start",
+                "enumValues":       "0,1",
+                "default":          0,
+                "advanced":        true
+            },
+            "param3": {
+                "label":            "Height Delay",
+                "description":      "Delay engine start until vehicle reaches this height (VTOL only)",
+                "units":            "m",
+                "default":          0,
+                "decimalPlaces":    1,
+                "min":              0,
+                "advanced":        true
             }
         },
         { "id": 241, "rawName": "MAV_CMD_PREFLIGHT_CALIBRATION", "friendlyName": "Calibration" },
@@ -1307,6 +1460,45 @@
             }
         },
         { "id": 30001, "rawName": "MAV_CMD_PAYLOAD_PREPARE_DEPLOY", "friendlyName": "Payload prepare deploy" },
-        { "id": 30002, "rawName": "MAV_CMD_PAYLOAD_CONTROL_DEPLOY", "friendlyName": "Payload control deploy" }
+        { "id": 30002, "rawName": "MAV_CMD_PAYLOAD_CONTROL_DEPLOY", "friendlyName": "Payload control deploy" },
+        {
+            "id":                   42600,
+            "rawName":              "MAV_CMD_DO_WINCH",
+            "friendlyName":         "Winch",
+            "description":          "Control onboard winch (deploy or retract cable).",
+            "specifiesCoordinate":  false,
+            "friendlyEdit":         true,
+            "category":             "Advanced",
+            "param1": {
+                "label":            "Winch Instance",
+                "description":      "Winch number (1-4)",
+                "default":          1,
+                "decimalPlaces":    0,
+                "min":              1
+            },
+            "param2": {
+                "label":            "Action",
+                "enumStrings":      "Relax,Deploy,Retract",
+                "enumValues":       "0,1,2",
+                "default":          0
+            },
+            "param3": {
+                "label":            "Cable Length",
+                "description":      "Length of cable to release (negative to wind)",
+                "units":            "m",
+                "default":          0,
+                "decimalPlaces":    1,
+                "advanced":        true
+            },
+            "param4": {
+                "label":            "Release Rate",
+                "description":      "Cable release rate (negative to wind)",
+                "units":            "m/s",
+                "default":          1,
+                "decimalPlaces":    2,
+                "min":              0,
+                "advanced":        true
+            }
+        }
     ]
 }
