@@ -56,3 +56,8 @@ QUrl PowerComponent::summaryQmlSource(void) const
 {
     return QUrl::fromUserInput("qrc:/qml/QGroundControl/AutoPilotPlugins/PX4/PowerComponentSummary.qml");
 }
+
+QString PowerComponent::pageDefinition(void) const
+{
+    return QStringLiteral(":/qml/QGroundControl/AutoPilotPlugins/PX4/pages/Power.ConfigUI.json");
+}

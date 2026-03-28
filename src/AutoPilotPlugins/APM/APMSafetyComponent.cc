@@ -8,6 +8,35 @@ APMSafetyComponent::APMSafetyComponent(Vehicle *vehicle, AutoPilotPlugin *autopi
 
 }
 
+QStringList APMSafetyComponent::sections() const
+{
+    QStringList list;
+    list << tr("Return to Launch");
+    list << tr("Battery Failsafe");
+    list << tr("Ground Station Failsafe");
+    if (_vehicle->fixedWing()) {
+        list << tr("Failsafe Triggers");
+    }
+    if (_vehicle->multiRotor()) {
+        list << tr("RC Failsafe");
+    }
+    if (_vehicle->multiRotor() || _vehicle->rover()) {
+        list << tr("Throttle Failsafe");
+        list << tr("EKF Failsafe");
+    }
+    if (_vehicle->multiRotor()) {
+        list << tr("Dead Reckoning Failsafe");
+    }
+    if (_vehicle->multiRotor() || _vehicle->rover()) {
+        list << tr("Other Failsafe Options");
+    }
+    if (_vehicle->multiRotor()) {
+        list << tr("GeoFence");
+    }
+    list << tr("Arming Checks");
+    return list;
+}
+
 QString APMSafetyComponent::description() const
 {
     switch (_vehicle->vehicleType()) {

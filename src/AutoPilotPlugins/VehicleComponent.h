@@ -32,6 +32,9 @@ class VehicleComponent : public QObject
     Q_PROPERTY(bool     allowSetupWhileArmed                                READ allowSetupWhileArmed   CONSTANT)
     Q_PROPERTY(bool     allowSetupWhileFlying                               READ allowSetupWhileFlying  CONSTANT)
     Q_PROPERTY(AutoPilotPlugin::KnownVehicleComponent KnownVehicleComponent READ KnownVehicleComponent  CONSTANT)
+    Q_PROPERTY(QStringList sections                                         READ sections               CONSTANT)
+    Q_PROPERTY(QString  pageDefinition                                      READ pageDefinition         CONSTANT)
+    Q_PROPERTY(bool     showFirstSectionOnRootClick                         READ showFirstSectionOnRootClick CONSTANT)
 
 public:
     explicit VehicleComponent(Vehicle *vehicle, AutoPilotPlugin *autopilot, AutoPilotPlugin::KnownVehicleComponent KnownVehicleComponent, QObject *parent = nullptr);
@@ -44,6 +47,19 @@ public:
     virtual bool setupComplete() const = 0;
     virtual QUrl setupSource() const = 0;
     virtual QUrl summaryQmlSource() const = 0;
+
+    /// Resource path to a ConfigUI.json page definition, or empty if none.
+    virtual QString pageDefinition() const { return QString(); }
+
+    /// Section names for sidebar navigation. Auto-populated from pageDefinition() JSON.
+    /// Repeat sections are expanded by probing vehicle parameters.
+    virtual QStringList sections() const;
+
+    /// When true, clicking the root component in the tree selects the first section instead of showing all.
+    virtual bool showFirstSectionOnRootClick() const { return false; }
+
+    /// Returns setup-complete status for a named section. Default returns true (no per-section tracking).
+    Q_INVOKABLE virtual bool sectionSetupComplete(const QString &sectionName) const { Q_UNUSED(sectionName); return true; }
 
     // @return true: Setup panel can be shown while vehicle is armed
     virtual bool allowSetupWhileArmed() const { return false; }
@@ -74,4 +90,8 @@ protected:
     Vehicle *_vehicle = nullptr;
     AutoPilotPlugin *_autopilot = nullptr;
     AutoPilotPlugin::KnownVehicleComponent _KnownVehicleComponent;
+
+private:
+    mutable QStringList _cachedSections;
+    mutable bool _sectionsParsed = false;
 };

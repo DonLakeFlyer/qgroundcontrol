@@ -10,6 +10,7 @@ public:
     explicit APMSafetyComponent(Vehicle *vehicle, AutoPilotPlugin *autopilot, QObject *parent = nullptr);
 
     QStringList setupCompleteChangedTriggerList() const final { return QStringList(); }
+    QStringList sections() const final;
 
     QString name() const final { return _name; }
     QString description() const final;

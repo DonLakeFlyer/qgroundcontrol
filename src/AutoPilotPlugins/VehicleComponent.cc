@@ -3,6 +3,10 @@
 #include "QGCLoggingCategory.h"
 #include "Vehicle.h"
 
+#include <QtCore/QFile>
+#include <QtCore/QJsonArray>
+#include <QtCore/QJsonDocument>
+#include <QtCore/QJsonObject>
 #include <QtQml/QQmlContext>
 #include <QtQuick/QQuickItem>
 
@@ -24,6 +28,65 @@ VehicleComponent::VehicleComponent(Vehicle *vehicle, AutoPilotPlugin *autopilot,
 VehicleComponent::~VehicleComponent()
 {
     // qCDebug(VehicleComponentLog) << Q_FUNC_INFO << this;
+}
+
+QStringList VehicleComponent::sections() const
+{
+    if (_sectionsParsed) {
+        return _cachedSections;
+    }
+    _sectionsParsed = true;
+
+    const QString path = pageDefinition();
+    if (path.isEmpty()) {
+        return _cachedSections;
+    }
+
+    QFile file(path);
+    if (!file.open(QIODevice::ReadOnly)) {
+        qCWarning(VehicleComponentLog) << "Failed to open page definition:" << path;
+        return _cachedSections;
+    }
+
+    const QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
+    const QJsonArray sectionsArray = doc.object().value("sections").toArray();
+
+    for (const QJsonValue &val : sectionsArray) {
+        const QJsonObject secObj = val.toObject();
+        const QString name = secObj.value("name").toString();
+        if (name.isEmpty()) {
+            continue;
+        }
+
+        const QJsonObject repeatObj = secObj.value("repeat").toObject();
+        if (!repeatObj.isEmpty() && _vehicle && _vehicle->parameterManager()) {
+            const QString paramPrefix = repeatObj.value("paramPrefix").toString();
+            const QString probePostfix = repeatObj.value("probePostfix").toString();
+            const int startIndex = repeatObj.value("startIndex").toInt(1);
+            const bool firstOmits = repeatObj.value("firstIndexOmitsNumber").toBool(false);
+
+            int count = 0;
+            for (int i = startIndex; ; i++) {
+                const QString idx = (firstOmits && i == startIndex) ? QString() : QString::number(i);
+                const QString probeParam = paramPrefix + idx + probePostfix;
+                if (!_vehicle->parameterManager()->parameterExists(ParameterManager::defaultComponentId, probeParam))
+                    break;
+                count++;
+            }
+
+            if (count <= 1) {
+                _cachedSections.append(name);
+            } else {
+                for (int i = 0; i < count; i++) {
+                    _cachedSections.append(name + QStringLiteral(" ") + QString::number(startIndex + i));
+                }
+            }
+        } else {
+            _cachedSections.append(name);
+        }
+    }
+
+    return _cachedSections;
 }
 
 void VehicleComponent::addSummaryQmlComponent(QQmlContext *context, QQuickItem *parent)

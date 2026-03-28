@@ -19,6 +19,20 @@ Item {
     property real   availableHeight:        height - pageLoader.y
     property bool   showAdvanced:           false
     property alias  advanced:               advancedCheckBox.checked
+    property string sectionNameFilter:       ""
+
+    function sectionVisible(name) {
+        if (pageLoader.item && typeof pageLoader.item.sectionVisible === "function") {
+            return pageLoader.item.sectionVisible(name)
+        }
+        return true
+    }
+
+    onSectionNameFilterChanged: {
+        if (pageLoader.item && typeof pageLoader.item.sectionNameFilter !== "undefined") {
+            pageLoader.item.sectionNameFilter = sectionNameFilter
+        }
+    }
 
     property bool   _vehicleIsRover:        globals.activeVehicle ? globals.activeVehicle.rover : false
     property bool   _vehicleArmed:          globals.activeVehicle ? globals.activeVehicle.armed : false
@@ -33,6 +47,9 @@ Item {
     Component.onCompleted: {
         if(pageLoader.item && pageLoader.item.setupPageCompleted) {
             pageLoader.item.setupPageCompleted()
+        }
+        if (pageLoader.item && typeof pageLoader.item.sectionNameFilter !== "undefined") {
+            pageLoader.item.sectionNameFilter = sectionNameFilter
         }
     }
 

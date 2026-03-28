@@ -1,0 +1,168 @@
+{
+    "version": 1,
+    "bindings": {
+        "_cpDist": "controller.getParameterFact(-1, \"CP_DIST\")",
+        "_fenceRadius": "controller.getParameterFact(-1, \"GF_MAX_HOR_DIST\")",
+        "_fenceAlt": "controller.getParameterFact(-1, \"GF_MAX_VER_DIST\")",
+        "_disarmLandDelay": "controller.getParameterFact(-1, \"COM_DISARM_LAND\")",
+        "_landSpeedMCExists": "controller.parameterExists(-1, \"MPC_LAND_SPEED\")",
+        "_rtlLandDelay": "controller.getParameterFact(-1, \"RTL_LAND_DELAY\")"
+    },
+    "sections": [
+        {
+            "name": "Low Battery Failsafe",
+            "image": "/qmlimages/LowBattery.svg",
+            "controls": [
+                {
+                    "param": "COM_LOW_BAT_ACT",
+                    "label": "Failsafe action",
+                    "control": "combobox"
+                },
+                {
+                    "param": "BAT_LOW_THR",
+                    "label": "Battery warn level"
+                },
+                {
+                    "param": "BAT_CRIT_THR",
+                    "label": "Battery failsafe level"
+                },
+                {
+                    "param": "BAT_EMERGEN_THR",
+                    "label": "Battery emergency level"
+                }
+            ]
+        },
+        {
+            "name": "Object Detection",
+            "image": "/qmlimages/ObjectAvoidance.svg",
+            "controls": [
+                {
+                    "param": "CP_DIST",
+                    "label": "Collision prevention minimum distance",
+                    "control": "slider",
+                    "enableCheckbox": {
+                        "checked": "_cpDist.rawValue > 0",
+                        "onClicked": "{ _cpDist.rawValue = enableCheckBoxChecked ? 5 : -1 }"
+                    }
+                },
+                {
+                    "setting": "flyViewSettings.showObstacleDistanceOverlay",
+                    "label": "Show obstacle distance overlay",
+                    "control": "checkbox"
+                }
+            ]
+        },
+        {
+            "name": "RC/Joystick Loss Failsafe",
+            "image": "/qmlimages/RCLoss.svg",
+            "controls": [
+                {
+                    "param": "NAV_RCL_ACT",
+                    "label": "Failsafe action",
+                    "control": "combobox"
+                },
+                {
+                    "param": "COM_RC_LOSS_T",
+                    "label": "RC/joystick loss timeout"
+                }
+            ]
+        },
+        {
+            "name": "Data Link Loss Failsafe",
+            "image": "/qmlimages/DatalinkLoss.svg",
+            "controls": [
+                {
+                    "param": "NAV_DLL_ACT",
+                    "label": "Failsafe action",
+                    "control": "combobox"
+                },
+                {
+                    "param": "COM_DL_LOSS_T",
+                    "label": "Data link loss timeout"
+                }
+            ]
+        },
+        {
+            "name": "Geofence Failsafe",
+            "image": "/qmlimages/GeoFence.svg",
+            "controls": [
+                {
+                    "param": "GF_ACTION",
+                    "label": "Action on breach",
+                    "control": "combobox"
+                },
+                {
+                    "param": "GF_MAX_HOR_DIST",
+                    "label": "Max radius",
+                    "control": "slider",
+                    "enableCheckbox": {
+                        "checked": "_fenceRadius.value > 0",
+                        "onClicked": "{ _fenceRadius.value = enableCheckBoxChecked ? 100 : 0 }"
+                    }
+                },
+                {
+                    "param": "GF_MAX_VER_DIST",
+                    "label": "Max altitude",
+                    "control": "slider",
+                    "enableCheckbox": {
+                        "checked": "_fenceAlt.value > 0",
+                        "onClicked": "{ _fenceAlt.value = enableCheckBoxChecked ? 100 : 0 }"
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Return to launch settings",
+            "image": "/qmlimages/ReturnToHomeAltitudeCopter.svg",
+            "controls": [
+                {
+                    "param": "RTL_RETURN_ALT",
+                    "label": "Climb to altitude of"
+                },
+                {
+                    "param": "RTL_LAND_DELAY",
+                    "label": "Return to launch, then:",
+                    "control": "radiogroup",
+                    "options": [
+                        {"label": "Land immediately", "value": 0, "checked": "_rtlLandDelay.value === 0"},
+                        {"label": "Loiter and do not land", "value": -1, "checked": "_rtlLandDelay.value < 0"},
+                        {"label": "Loiter and land after specified time", "value": 60, "checked": "_rtlLandDelay.value > 0"}
+                    ]
+                },
+                {
+                    "param": "RTL_LAND_DELAY",
+                    "label": "Loiter time",
+                    "enableWhen": "_rtlLandDelay.value > 0"
+                },
+                {
+                    "param": "RTL_DESCEND_ALT",
+                    "label": "Loiter altitude",
+                    "enableWhen": "_rtlLandDelay.value !== 0"
+                }
+            ]
+        },
+        {
+            "name": "Land Mode Settings",
+            "image": "/qmlimages/LandModeCopter.svg",
+            "controls": [
+                {
+                    "param": "MPC_LAND_SPEED",
+                    "label": "Landing descent rate",
+                    "optional": true,
+                    "showWhen": "_landSpeedMCExists"
+                },
+                {
+                    "param": "COM_DISARM_LAND",
+                    "label": "Disarm after",
+                    "control": "slider",
+                    "sliderMin": 0,
+                    "sliderMax": 10,
+                    "enableCheckbox": {
+                        "checked": "_disarmLandDelay.value > 0",
+                        "onClicked": "{ _disarmLandDelay.value = enableCheckBoxChecked ? 2 : 0 }"
+                    }
+                }
+            ]
+        }
+    ]
+}

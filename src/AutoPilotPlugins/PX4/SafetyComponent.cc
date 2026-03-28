@@ -46,3 +46,8 @@ QUrl SafetyComponent::summaryQmlSource(void) const
 {
     return QUrl::fromUserInput("qrc:/qml/QGroundControl/AutoPilotPlugins/PX4/SafetyComponentSummary.qml");
 }
+
+QString SafetyComponent::pageDefinition(void) const
+{
+    return QStringLiteral(":/qml/QGroundControl/AutoPilotPlugins/PX4/pages/Safety.ConfigUI.json");
+}
