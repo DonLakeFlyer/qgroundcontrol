@@ -48,7 +48,7 @@ SetupPage {
             property bool _loadComplete: false
 
             Component.onCompleted: {
-                // We use QtCharts only on Desktop platforms
+                // We use QtGraphs only on Desktop platforms
                 showAdvanced = !ScreenTools.isMobile
                 _loadComplete = true
                 calcAutoTuneChannel()
