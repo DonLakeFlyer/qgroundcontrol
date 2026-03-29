@@ -90,7 +90,7 @@ target_include_directories(${CMAKE_PROJECT_NAME}
 target_link_libraries(${CMAKE_PROJECT_NAME}
     PRIVATE
         # Qt6 Core
-        Qt6::Charts
+        Qt6::Graphs
         Qt6::Concurrent
         Qt6::Core
         Qt6::Core5Compat
@@ -102,7 +102,7 @@ target_link_libraries(${CMAKE_PROJECT_NAME}
         Qt6::StateMachine
         Qt6::Svg
         Qt6::TextToSpeech
-        Qt6::Widgets
+        Qt6::Widgets    # Only for Platform.cc pre-startup error dialogs (QMessageBox)
         Qt6::Xml
 
         # Qt6 QML/Quick

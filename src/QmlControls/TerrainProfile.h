@@ -2,9 +2,8 @@
 
 #include <QtCore/QLoggingCategory>
 #include <QtQuick/QQuickItem>
-#include <QtQuick/QSGGeometryNode>
-#include <QtQuick/QSGGeometry>
 #include <QtQmlIntegration/QtQmlIntegration>
+#include <QtGraphs/QXYSeries>
 
 Q_DECLARE_LOGGING_CATEGORY(TerrainProfileLog)
 
@@ -27,13 +26,16 @@ public:
     Q_PROPERTY(double               pixelsPerMeter      MEMBER _pixelsPerMeter                              NOTIFY pixelsPerMeterChanged)
     Q_PROPERTY(double               minAMSLAlt          MEMBER _minAMSLAlt                                  NOTIFY minAMSLAltChanged)
     Q_PROPERTY(double               maxAMSLAlt          MEMBER _maxAMSLAlt                                  NOTIFY maxAMSLAltChanged)
+    Q_PROPERTY(double               horizontalScale     MEMBER _horizontalScale)
+    Q_PROPERTY(double               verticalScale       MEMBER _verticalScale)
 
     MissionController*  missionController(void) { return _missionController; }
 
     void setMissionController(MissionController* missionController);
 
-    // Overrides from QQuickItem
-    QSGNode* updatePaintNode(QSGNode* oldNode, QQuickItem::UpdatePaintNodeData* updatePaintNodeData);
+    /// Populates the given series with terrain/flight profile data.
+    /// Call this from QML when profileChanged is emitted.
+    Q_INVOKABLE void updateSeries(QXYSeries* terrainSeries, QXYSeries* flightSeries, QXYSeries* missingSeries, QXYSeries* collisionSeries);
 
     // Override from QQmlParserStatus
     void componentComplete(void) final;
@@ -44,18 +46,19 @@ signals:
     void pixelsPerMeterChanged      (void);
     void minAMSLAltChanged          (void);
     void maxAMSLAltChanged          (void);
+    void profileChanged             (void);
     void _updateSignal              (void);
 
 private slots:
     void _newVisualItems            (void);
+    void _updateProfile             (void);
 
 private:
-    void    _createGeometry                 (QSGGeometryNode*& geometryNode, QSGGeometry*& geometry, QSGGeometry::DrawingMode drawingMode, const QColor& color);
     void    _updateSegmentCounts            (FlightPathSegment* segment, int& cFlightProfileSegments, int& cTerrainPoints, int& cMissingTerrainSegments, int& cTerrainCollisionSegments, double& minTerrainHeight, double& maxTerrainHeight);
-    void    _addTerrainProfileSegment       (FlightPathSegment* segment, double currentDistance, double amslAltRange, QSGGeometry::Point2D* terrainProfileVertices, int& terrainVertexIndex);
-    void    _addMissingTerrainSegment       (FlightPathSegment* segment, double currentDistance, QSGGeometry::Point2D* missingTerrainVertices, int& missingTerrainVertexIndex);
-    void    _addTerrainCollisionSegment     (FlightPathSegment* segment, double currentDistance, double amslAltRange, QSGGeometry::Point2D* terrainCollisionVertices, int& terrainCollisionVertexIndex);
-    void    _addFlightProfileSegment        (FlightPathSegment* segment, double currentDistance, double amslAltRange, QSGGeometry::Point2D* flightProfileVertices, int& flightProfileVertexIndex);
+    void    _addTerrainPoints               (FlightPathSegment* segment, double currentDistance, QList<QPointF>& points);
+    void    _addFlightPoints                (FlightPathSegment* segment, double currentDistance, QList<QPointF>& points);
+    void    _addMissingPoints               (FlightPathSegment* segment, double currentDistance, QList<QPointF>& points);
+    void    _addCollisionPoints             (FlightPathSegment* segment, double currentDistance, QList<QPointF>& points);
     bool    _shouldAddFlightProfileSegment  (FlightPathSegment* segment);
     bool    _shouldAddMissingTerrainSegment (FlightPathSegment* segment);
 
@@ -65,10 +68,8 @@ private:
     double              _pixelsPerMeter =       0;
     double              _minAMSLAlt =           0;
     double              _maxAMSLAlt =           0;
-
-    static const int _lineWidth =       7;
+    double              _horizontalScale =      1;
+    double              _verticalScale =        1;
 
     Q_DISABLE_COPY(TerrainProfile)
 };
-
-QML_DECLARE_TYPE(TerrainProfile)
