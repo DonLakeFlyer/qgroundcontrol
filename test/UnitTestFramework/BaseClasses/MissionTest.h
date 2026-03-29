@@ -1,6 +1,6 @@
 #pragma once
 
-#include "MAVLinkLib.h"
+#include "MAVLinkMessageType.h"
 #include "UnitTest.h"
 #include "VehicleTest.h"
 
