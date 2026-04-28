@@ -14,6 +14,7 @@
 #include "MultiVehicleManager.h"
 
 #include <QtCore/QCoreApplication>
+#include <QtCore/QSet>
 #include <algorithm>
 #include <QtCore/QSettings>
 #include <QtCore/QThread>
@@ -750,6 +751,7 @@ void Joystick::_handleButtons()
 
         //-- Process button press/release
         const int buttonDelay = static_cast<int>(1000.0 / _joystickSettings.buttonFrequencyHz()->rawValue().toDouble());
+        QSet<QString> executedActions;
         for (int buttonIndex = 0; buttonIndex < _totalButtonCount; buttonIndex++) {
             if (!_assignedButtonActions[buttonIndex]) {
                 continue;
@@ -792,14 +794,20 @@ void Joystick::_handleButtons()
                         } else {
                             qCDebug(JoystickLog) << "Action triggered - button:Action" << buttonIndex << buttonAction;
                         }
-                        _executeButtonAction(buttonAction, ButtonEventDownTransition);
-                        return;
+                        if (!executedActions.contains(buttonAction)) {
+                            _executeButtonAction(buttonAction, ButtonEventDownTransition);
+                            executedActions.insert(buttonAction);
+                        }
+                        continue;
                     }
                 }
             } else if (buttonEventState == ButtonEventUpTransition) {
-                qCDebug(JoystickLog) << "Button up - button:action" << buttonIndex << buttonAction;
-                _executeButtonAction(buttonAction, ButtonEventUpTransition);
-                return;
+                if (!executedActions.contains(buttonAction)) {
+                    qCDebug(JoystickLog) << "Button up - button:action" << buttonIndex << buttonAction;
+                    _executeButtonAction(buttonAction, ButtonEventUpTransition);
+                    executedActions.insert(buttonAction);
+                }
+                continue;
             }
         }
     }
