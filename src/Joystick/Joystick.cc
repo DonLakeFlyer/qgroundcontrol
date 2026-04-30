@@ -43,7 +43,7 @@ AssignedButtonAction::AssignedButtonAction(const QString &actionName_, bool repe
     : actionName(actionName_)
     , repeat(repeat_)
 {
-    qCDebug(JoystickLog) << this;
+    qCDebug(JoystickVerboseLog) << this;
 }
 
 AvailableButtonAction::AvailableButtonAction(const QString &actionName_, bool canRepeat_, QObject *parent)
@@ -51,7 +51,7 @@ AvailableButtonAction::AvailableButtonAction(const QString &actionName_, bool ca
     , _actionName(actionName_)
     , _repeat(canRepeat_)
 {
-    qCDebug(JoystickLog) << this;
+    qCDebug(JoystickVerboseLog) << this;
 }
 
 /*===========================================================================*/
@@ -307,6 +307,11 @@ void Joystick::_loadAxisSettings(bool joystickCalibrated, int transmitterMode)
             axisSettings.endGroup();
             continue;
         }
+        if (axisFunction == maxAxisFunction) {
+            // Older code would save unassigned axes with maxAxisFunction, we now skip loading those since that is not a valid function assignment
+            axisSettings.endGroup();
+            continue;
+        }
         _setJoystickAxisForAxisFunction(static_cast<AxisFunction_t>(axisFunction), axis);
 
         axisCalibration.center = axisSettings.value(centerKey, axisCalibration.center).toInt();
@@ -473,6 +478,11 @@ void Joystick::_saveAxisSettings(int transmitterMode)
     const QString reversedKey = QString::fromLatin1(kAxisReversedKey);
 
     for (int axis = 0; axis < _axisCount; axis++) {
+        AxisFunction_t function = _getAxisFunctionForJoystickAxis(axis);
+        if (function == maxAxisFunction) {
+            // No function assigned to axis, nothing to save
+            continue;
+        }
         AxisCalibration_t *const calibration = &_rgCalibration[axis];
         axisSettings.beginGroup(QString::number(axis));
 
@@ -481,7 +491,6 @@ void Joystick::_saveAxisSettings(int transmitterMode)
         axisSettings.setValue(maxKey, calibration->max);
         axisSettings.setValue(deadbandKey, calibration->deadband);
         axisSettings.setValue(reversedKey, calibration->reversed);
-        AxisFunction_t function = _getAxisFunctionForJoystickAxis(axis);
         axisSettings.setValue(functionKey, static_cast<int>(function));
 
         qCDebug(JoystickLog)
@@ -1091,8 +1100,14 @@ void Joystick::_startPollingForVehicle(Vehicle &vehicle)
         return;
     }
 
-    _currentPollingType = PollingForVehicle;
     _pollingVehicle = &vehicle;
+    if (_currentPollingType == PollingForConfiguration) {
+        qCDebug(JoystickLog) << "Delayed start of polling for vehicle. Currently PollingForConfiguration. Vehicle id:"  << _pollingVehicle->id();
+        _previousPollingType = PollingForVehicle;
+    } else {
+        qCDebug(JoystickLog) << "Started joystick polling for vehicle. Vehicle id:"  << _pollingVehicle->id();
+        _currentPollingType = PollingForVehicle;
+    }
 
     _buildAvailableButtonsActionList(_pollingVehicle);
 
@@ -1115,8 +1130,6 @@ void Joystick::_startPollingForVehicle(Vehicle &vehicle)
         (void) connect(this, &Joystick::gimbalPitchStop,    gimbal, &GimbalController::gimbalPitchStop);
         (void) connect(this, &Joystick::gimbalYawStop,      gimbal, &GimbalController::gimbalYawStop);
     }
-
-    qDebug(JoystickLog) << "Started joystick polling for vehicle" << _pollingVehicle->id();
 
     start();
 }
@@ -1163,7 +1176,7 @@ void Joystick::_stopPollingForConfiguration()
     }
 }
 
-void Joystick::_stopAllPolling()
+void Joystick::_stopAllPollingForVehicle()
 {
     if (_pollingVehicle) {
         (void) disconnect(this, nullptr, _pollingVehicle, nullptr);
@@ -1174,13 +1187,15 @@ void Joystick::_stopAllPolling()
         _pollingVehicle = nullptr;
     }
 
-    qCDebug(JoystickLog) << "Stopped all joystick polling";
-
-    _currentPollingType = NotPolling;
     _previousPollingType = NotPolling;
-
-    if (isRunning()) {
-        _exitThread = true;
+    if (_currentPollingType == PollingForConfiguration) {
+        qCDebug(JoystickLog) << "Currently PollingForConfiguration. Delayed stop of polling for vehicle until after configuration polling stopped.";
+    } else {
+        qCDebug(JoystickLog) << "Stopped joystick polling for vehicle.";
+        _currentPollingType = NotPolling;
+        if (isRunning()) {
+            _exitThread = true;
+        }
     }
 }
 
@@ -1221,7 +1236,7 @@ Joystick::AxisCalibration_t Joystick::getAxisCalibration(int axis) const
 void Joystick::_setJoystickAxisForAxisFunction(AxisFunction_t axisFunction, int joystickAxis)
 {
     if (axisFunction == maxAxisFunction) {
-        qCWarning(JoystickLog) << "Internal Error: maxAxisFunction passed to _setJoystickAxisForAxisFunction";
+        // No function assigned to axis
         return;
     }
     if (joystickAxis == kJoystickAxisNotAssigned) {
