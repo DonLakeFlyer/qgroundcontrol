@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# Shim for CMAKE_AUTOMOC_EXECUTABLE — routes moc invocations through moccache.py.
+# Set MOCCACHE_MOC to the real moc executable; falls back to the newest Qt in ~/Qt.
+set -eu
+here=$(cd "$(dirname "$0")" && pwd)
+moc="${MOCCACHE_MOC:-}"
+if [[ -z "$moc" ]]; then
+    for candidate in "$HOME"/Qt/*/macos/libexec/moc "$HOME"/Qt/*/gcc_64/libexec/moc; do
+        [[ -x "$candidate" ]] && moc="$candidate"
+    done
+fi
+if [[ -z "$moc" || ! -x "$moc" ]]; then
+    echo "moccache-moc: real moc not found; set MOCCACHE_MOC" >&2
+    exit 1
+fi
+exec python3 "$here/moccache.py" --real-moc "$moc" "$@"
