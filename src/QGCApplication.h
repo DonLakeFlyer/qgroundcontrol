@@ -80,6 +80,9 @@ public:
 
     /// Although public, these methods are internal and should only be called by UnitTest code
     QQmlApplicationEngine *qmlAppEngine() const { return _qmlAppEngine; }
+    /// UI test harnesses create their own QML engine; registering it here lets app-level
+    /// messaging (showAppMessage) reach the test's MainWindow. Pass nullptr on teardown.
+    void setQmlAppEngine(QQmlApplicationEngine *engine) { _qmlAppEngine = engine; }
 
 signals:
     void languageChanged(const QLocale &locale);

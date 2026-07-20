@@ -228,6 +228,12 @@ void ParameterManagerTest::_paramReadParamError()
 void ParameterManagerTest::_setParamWithFailureMode(MockLink::ParamSetFailureMode_t failureMode, bool expectSuccess)
 {
     QVERIFY2(!_mockLink, "MockLink already connected");
+    // BAT1_V_CHARGED requires a vehicle reboot, so writing it pops the reboot
+    // app message. showRebootAppMessage() debounces repeat messages (2 min),
+    // so which write test sees it depends on execution order — ignore rather
+    // than expect.
+    ignoreLogMessage("API.QGCApplication.AppMessage", QtDebugMsg,
+                     QRegularExpression(QStringLiteral("Reboot vehicle for changes to take effect")));
     // Bring up a clean mock vehicle for each run
     _connectMockLink();
     QVERIFY(_mockLink);

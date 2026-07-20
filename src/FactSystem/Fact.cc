@@ -926,12 +926,12 @@ FactValueSliderListModel *Fact::valueSliderModel()
 void Fact::_checkForRebootMessaging()
 {
     if (qgcApp()) {
-        if (!QGC::runningUnitTests()) {
-            if (vehicleRebootRequired()) {
-                QGC::showRebootAppMessage(tr("Reboot vehicle for changes to take effect."));
-            } else if (qgcRebootRequired()) {
-                QGC::showRebootAppMessage(tr("Restart application for changes to take effect."));
-            }
+        // showAppMessage() logs instead of showing a blocking dialog while unit
+        // tests run, so tests assert this messaging via expectAppMessage()
+        if (vehicleRebootRequired()) {
+            QGC::showRebootAppMessage(tr("Reboot vehicle for changes to take effect."));
+        } else if (qgcRebootRequired()) {
+            QGC::showRebootAppMessage(tr("Restart application for changes to take effect."));
         }
     }
 }

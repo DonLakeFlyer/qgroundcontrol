@@ -138,11 +138,14 @@ void APMSensorsCalibrationUITest::_runFullAccelCal()
     QVERIFY2(QTest::qWaitFor([&] { return qFuzzyCompare(progressBar->property("value").toDouble(), 1.0); }, 10000),
              "Progress bar never reached 1.0 after accel cal success");
 
-    // APM's onCalibrationComplete handler opens postOnboardCompassCalibrationFactory for
-    // both CalibrationAccel and CalibrationMag.  Dismiss the dialog so the sensors
-    // page is unblocked before callers proceed.
-    QVERIFY2(findVisibleItem(_rootItem, QStringLiteral("popupDialog_acceptButton"), 5000),
+    // Accel cal completion must show the generic post-calibration dialog
+    // (postCalibrationDialog), NOT the compass results dialog with fitness bars
+    // (postOnboardCompassCalibrationDialog).  Dismiss it so the sensors page is
+    // unblocked before callers proceed.
+    QVERIFY2(findVisibleItem(_rootItem, QStringLiteral("postCalibrationDialog"), 5000),
              "Post-accel-cal dialog not shown");
+    QVERIFY2(!_rootItem->findChild<QQuickItem*>(QStringLiteral("postOnboardCompassCalibrationDialog")),
+             "Compass results dialog incorrectly shown after accel cal");
     QVERIFY2(clickButton(QStringLiteral("popupDialog_acceptButton")),
              "Failed to dismiss post-accel-cal dialog");
 }
@@ -202,7 +205,7 @@ void APMSensorsCalibrationUITest::_testCompassCalibration()
     // Wait for completion: MAG_CAL_REPORT → StopCalibrationSuccessShowLog → dialog opens.
     // Note: StopCalibrationSuccessShowLog resets progress to 0 (not 1.0), so wait for
     // the post-cal dialog directly rather than waiting for progress == 1.0.
-    QVERIFY2(findVisibleItem(_rootItem, QStringLiteral("popupDialog_acceptButton"), 25000),
+    QVERIFY2(findVisibleItem(_rootItem, QStringLiteral("postOnboardCompassCalibrationDialog"), 25000),
              "Post-compass-cal dialog not shown");
     QVERIFY2(clickButton(QStringLiteral("popupDialog_acceptButton")),
              "Failed to dismiss post-compass-cal dialog");
