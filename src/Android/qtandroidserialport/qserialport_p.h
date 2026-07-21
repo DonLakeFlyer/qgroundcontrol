@@ -21,8 +21,8 @@
 #include <QtCore/QWaitCondition>
 #include <QtCore/private/qiodevice_p.h>
 #include <QtCore/private/qproperty_p.h>
-
 #include <atomic>
+#include <thread>
 
 #include "AndroidSerial.h"
 #include "qserialport.h"
@@ -82,31 +82,19 @@ public:
 
     void setError(const QSerialPortErrorInfo& errorInfo);
 
-    void setBindableError(QSerialPort::SerialPortError error_)
-    {
-        setError(error_);
-    }
+    void setBindableError(QSerialPort::SerialPortError error_) { setError(error_); }
     Q_OBJECT_COMPAT_PROPERTY_WITH_ARGS(QSerialPortPrivate, QSerialPort::SerialPortError, error,
                                        &QSerialPortPrivate::setBindableError, QSerialPort::NoError)
 
-    bool setBindableDataBits(QSerialPort::DataBits dataBits_)
-    {
-        return q_func()->setDataBits(dataBits_);
-    }
+    bool setBindableDataBits(QSerialPort::DataBits dataBits_) { return q_func()->setDataBits(dataBits_); }
     Q_OBJECT_COMPAT_PROPERTY_WITH_ARGS(QSerialPortPrivate, QSerialPort::DataBits, dataBits,
                                        &QSerialPortPrivate::setBindableDataBits, QSerialPort::Data8)
 
-    bool setBindableParity(QSerialPort::Parity parity_)
-    {
-        return q_func()->setParity(parity_);
-    }
+    bool setBindableParity(QSerialPort::Parity parity_) { return q_func()->setParity(parity_); }
     Q_OBJECT_COMPAT_PROPERTY_WITH_ARGS(QSerialPortPrivate, QSerialPort::Parity, parity,
                                        &QSerialPortPrivate::setBindableParity, QSerialPort::NoParity)
 
-    bool setBindableStopBits(QSerialPort::StopBits stopBits_)
-    {
-        return q_func()->setStopBits(stopBits_);
-    }
+    bool setBindableStopBits(QSerialPort::StopBits stopBits_) { return q_func()->setStopBits(stopBits_); }
     Q_OBJECT_COMPAT_PROPERTY_WITH_ARGS(QSerialPortPrivate, QSerialPort::StopBits, stopBits,
                                        &QSerialPortPrivate::setBindableStopBits, QSerialPort::OneStop)
 
@@ -117,10 +105,7 @@ public:
     Q_OBJECT_COMPAT_PROPERTY_WITH_ARGS(QSerialPortPrivate, QSerialPort::FlowControl, flowControl,
                                        &QSerialPortPrivate::setBindableFlowControl, QSerialPort::NoFlowControl)
 
-    bool setBindableBreakEnabled(bool isBreakEnabled_)
-    {
-        return q_func()->setBreakEnabled(isBreakEnabled_);
-    }
+    bool setBindableBreakEnabled(bool isBreakEnabled_) { return q_func()->setBreakEnabled(isBreakEnabled_); }
     Q_OBJECT_COMPAT_PROPERTY_WITH_ARGS(QSerialPortPrivate, bool, isBreakEnabled,
                                        &QSerialPortPrivate::setBindableBreakEnabled, false)
 
@@ -158,7 +143,20 @@ private:
     static int _parityToAndroidParity(QSerialPort::Parity parity);
     static int _flowControlToAndroidFlowControl(QSerialPort::FlowControl flowControl);
 
+    // POSIX backend for internal (non-USB) device nodes such as /dev/ttyS1
+    bool _posixOpen(QIODevice::OpenMode mode);
+    bool _posixStartReadThread();
+    void _posixStopReadThread();
+    void _posixReadLoop();
+    qint64 _posixWrite(const char* data, qint64 maxSize, int timeout);
+    bool _posixSetParameters(qint32 baudRate, QSerialPort::DataBits dataBits, QSerialPort::StopBits stopBits,
+                             QSerialPort::Parity parity);
+    bool _posixSetFlowControl(QSerialPort::FlowControl flowControl);
+
     int _deviceId = INVALID_DEVICE_ID;
+    bool _isDeviceNode = false;
+    std::thread _posixReadThread;
+    int _posixShutdownPipe[2] = {-1, -1};
 
     std::atomic<bool> _readyReadPending{false};
     std::atomic<qint64> _bufferBytesEstimate{0};
