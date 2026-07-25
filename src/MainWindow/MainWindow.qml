@@ -17,18 +17,11 @@ import QGroundControl.Toolbar
 ApplicationWindow {
     id:         mainWindow
     visible:    true
-    // The special casing for android prevents white bars from showing up on the edges of the screen with newer android versions
-    flags:      Qt.Window | (ScreenTools.isAndroid ? Qt.ExpandedClientAreaHint | Qt.NoTitleBarBackgroundHint : 0)
+    // HACK: match window-test app - default flags, declarative fullscreen on mobile
+    visibility: Window.FullScreen
 
-    Component.onCompleted: {
-        // Start the sequence of first run prompt(s)
-        firstRunPromptManager.nextPrompt()
-    }
-
-    /// Saves main window position and size and re-opens it in the same position and size next time
-    MainWindowSavedState {
-        window: mainWindow
-    }
+    onWidthChanged: console.log("MainWindow width changed:", width, height)
+    onHeightChanged: console.log("MainWindow height changed:", width, height)
 
     QtObject {
         id: firstRunPromptManager

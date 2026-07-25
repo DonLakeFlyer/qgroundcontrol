@@ -114,7 +114,11 @@ option(QGC_NO_SERIAL_LINK "Disable serial port communication" OFF)
 # Video Streaming Options
 # ============================================================================
 
-option(QGC_ENABLE_GST_VIDEOSTREAMING "Enable GStreamer video backend" ON)
+# HACK: AX12 debugging - GStreamer disabled to test load-time plugin registration as culprit
+option(QGC_ENABLE_GST_VIDEOSTREAMING "Enable GStreamer video backend" OFF)
+
+# HACK: AX12 debugging - exclude the entire src/Android module from the compile
+option(QGC_NO_ANDROID_MODULE "Exclude src/Android module from compile (AX12 debug)" ON)
 
 # ============================================================================
 # MAVLink Configuration

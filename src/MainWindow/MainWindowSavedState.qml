@@ -34,7 +34,7 @@ Item {
             window.width = ScreenTools.screenWidth
             window.height = ScreenTools.screenHeight
         } else if (ScreenTools.isMobile) {
-            window.showFullScreen();
+            // HACK: fullscreen visibility is set declaratively on the window (match window-test app)
         } else if (QGroundControl.corePlugin.options.enableSaveMainWindowPosition) {
             window.minimumWidth = Math.min(ScreenTools.defaultFontPixelWidth * 100, Screen.width)
             window.minimumHeight = Math.min(ScreenTools.defaultFontPixelWidth * 50, Screen.height)

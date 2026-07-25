@@ -2,7 +2,9 @@
 # VideoManager Tests
 # ============================================================================
 
-add_subdirectory(GStreamer)
+if(QGC_ENABLE_GST_VIDEOSTREAMING)
+    add_subdirectory(GStreamer)
+endif()
 
 target_sources(${CMAKE_PROJECT_NAME}
     PRIVATE

@@ -108,7 +108,7 @@ static jboolean jniInit(JNIEnv *env, jobject thiz)
     return JNI_TRUE;
 }
 
-static jint jniSetNativeMethods()
+[[maybe_unused]] static jint jniSetNativeMethods()
 {
     qCDebug(AndroidInitLog) << Q_FUNC_INFO;
 
@@ -141,6 +141,8 @@ static jint jniSetNativeMethods()
     return JNI_OK;
 }
 
+// HACK: AX12 debugging - SDL is static and provides the single JNI_OnLoad; disable QGC's to avoid duplicate symbol
+#if 0
 jint JNI_OnLoad(JavaVM* vm, void*)
 {
     qCDebug(AndroidInitLog) << Q_FUNC_INFO;
@@ -152,6 +154,8 @@ jint JNI_OnLoad(JavaVM* vm, void*)
         return JNI_ERR;
     }
 
+    // HACK: AX12 debugging - no QGC Java classes; skip all QGC JNI registration
+#if 0
     if (jniSetNativeMethods() != JNI_OK) {
         return JNI_ERR;
     }
@@ -163,9 +167,11 @@ jint JNI_OnLoad(JavaVM* vm, void*)
 #endif
 
     QNativeInterface::QAndroidApplication::hideSplashScreen(333);
+#endif
 
     return JNI_VERSION_1_6;
 }
+#endif
 
 void JNI_OnUnload(JavaVM* vm, void*)
 {

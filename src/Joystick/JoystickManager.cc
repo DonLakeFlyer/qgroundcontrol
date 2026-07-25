@@ -4,15 +4,22 @@
 #include "MultiVehicleManager.h"
 #include "SettingsManager.h"
 #include "JoystickManagerSettings.h"
-#include "JoystickSDL.h"
-#include "SDLJoystick.h"
 #include "QGCLoggingCategory.h"
 
-#ifdef Q_OS_ANDROID
+#if defined(Q_OS_ANDROID) && !defined(QGC_NO_ANDROID_MODULE)
 #include "AndroidEvents.h"
 #endif
 
-using JoystickBackend = JoystickSDL;
+// HACK: AX12 debugging - SDL pulled out completely. Null backend so JoystickManager
+// (and all its Vehicle/Camera/plugin consumers) keeps compiling without any joystick support.
+namespace {
+struct NullJoystickBackend {
+    static bool init() { return false; }
+    static QMap<QString, Joystick*> discover() { return {}; }
+    static void shutdown(bool) {}
+};
+}
+using JoystickBackend = NullJoystickBackend;
 
 #include <QtCore/QApplicationStatic>
 #include <QtCore/QSettings>
@@ -31,7 +38,7 @@ JoystickManager::JoystickManager(QObject *parent)
     // SDL_PumpEvents() must be called from main thread for device add/remove events
     _pollTimer.setInterval(500);
     (void) connect(&_pollTimer, &QTimer::timeout, this, []() {
-        SDLJoystick::pumpEvents();
+        // HACK: AX12 debugging - SDL pulled out, nothing to pump
     });
 
     (void) connect(_joystickManagerSettings->activeJoystickName(), &Fact::rawValueChanged, this, [this](const QVariant &value) {
@@ -55,7 +62,7 @@ JoystickManager::JoystickManager(QObject *parent)
 
     (void) connect(MultiVehicleManager::instance(), &MultiVehicleManager::activeVehicleChanged, this, &JoystickManager::_activeVehicleChanged);
 
-#ifdef Q_OS_ANDROID
+#if defined(Q_OS_ANDROID) && !defined(QGC_NO_ANDROID_MODULE)
     // Re-scan for joysticks when app resumes - devices may have connected/disconnected while backgrounded
     (void) connect(AndroidEvents::instance(), &AndroidEvents::resumed, this, &JoystickManager::_checkForAddedOrRemovedJoysticks);
 #endif
@@ -315,34 +322,20 @@ void JoystickManager::_handleSensorUpdate(int instanceId, int sensor, float x, f
 {
     Joystick *joystick = _findJoystickByInstanceId(instanceId);
     if (joystick) {
-        auto *sdlJoystick = qobject_cast<JoystickBackend*>(joystick);
         const QVector3D data(x, y, z);
         // SDL_SENSOR_ACCEL = 1, SDL_SENSOR_GYRO = 2
         if (sensor == 1 || sensor == 4 || sensor == 6) {  // ACCEL, ACCEL_L, ACCEL_R
-            if (sdlJoystick) {
-                sdlJoystick->updateCachedAccelData(data);
-            } else {
-                emit joystick->accelerometerDataUpdated(data);
-            }
+            emit joystick->accelerometerDataUpdated(data);
         } else if (sensor == 2 || sensor == 5 || sensor == 7) {  // GYRO, GYRO_L, GYRO_R
-            if (sdlJoystick) {
-                sdlJoystick->updateCachedGyroData(data);
-            } else {
-                emit joystick->gyroscopeDataUpdated(data);
-            }
+            emit joystick->gyroscopeDataUpdated(data);
         }
     }
 }
 
 Joystick *JoystickManager::_findJoystickByInstanceId(int instanceId)
 {
-    for (Joystick *joystick : _name2JoystickMap) {
-        if (auto *sdlJoystick = qobject_cast<JoystickBackend*>(joystick)) {
-            if (sdlJoystick->instanceId() == instanceId) {
-                return joystick;
-            }
-        }
-    }
+    // HACK: AX12 debugging - SDL pulled out, no SDL-backed joysticks exist
+    Q_UNUSED(instanceId);
     return nullptr;
 }
 

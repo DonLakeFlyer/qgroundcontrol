@@ -6,7 +6,7 @@
 #include "QGCMAVLink.h"
 #include "LinkManager.h"
 
-#ifdef Q_OS_ANDROID
+#if defined(Q_OS_ANDROID) && !defined(QGC_NO_ANDROID_MODULE)
 #include "AndroidInterface.h"
 #endif
 
@@ -77,7 +77,7 @@ DECLARE_SETTINGGROUP(App, "")
         savePathFact->setRawValue(rootDir.absolutePath());
     #else
         QString rootDirPath;
-        #ifdef Q_OS_ANDROID
+        #if defined(Q_OS_ANDROID) && !defined(QGC_NO_ANDROID_MODULE)
             if (!androidDontSaveToSDCard()->rawValue().toBool()) {
                 rootDirPath = AndroidInterface::getSDCardPath();
                 qDebug() << "AndroidInterface::getSDCardPath();" << rootDirPath;

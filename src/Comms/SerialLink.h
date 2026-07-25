@@ -4,7 +4,7 @@
 #include "LinkInterface.h"
 
 #include <QtCore/QString>
-#ifdef Q_OS_ANDROID
+#if defined(Q_OS_ANDROID) && !defined(QGC_NO_ANDROID_MODULE)
 #include "qserialport.h"
 #else
 #include <QtSerialPort/QSerialPort>

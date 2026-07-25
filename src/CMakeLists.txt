@@ -11,6 +11,10 @@ set_source_files_properties(MainWindow/MainWindow.qml
     PROPERTIES
         QT_RESOURCE_ALIAS MainWindow.qml
 )
+set_source_files_properties(MainWindow/MainWindowStripped.qml
+    PROPERTIES
+        QT_RESOURCE_ALIAS MainWindowStripped.qml
+)
 
 qt_add_qml_module(QGroundControlModule
     URI QGroundControl
@@ -18,6 +22,7 @@ qt_add_qml_module(QGroundControlModule
     RESOURCE_PREFIX /qml
     QML_FILES
         MainWindow/MainWindow.qml
+        MainWindow/MainWindowStripped.qml
         MainWindow/MainWindowSavedState.qml
     IMPORTS
         QGC
@@ -65,7 +70,12 @@ add_subdirectory(VideoManager)
 add_subdirectory(Viewer3D)
 
 # Platform-specific
-add_subdirectory(Android)
+# HACK: AX12 debugging - QGC_NO_ANDROID_MODULE excludes src/Android entirely
+if(QGC_NO_ANDROID_MODULE)
+    target_compile_definitions(${CMAKE_PROJECT_NAME} PUBLIC QGC_NO_ANDROID_MODULE)
+else()
+    add_subdirectory(Android)
+endif()
 
 # Qt plugins
 add_subdirectory(QtLocationPlugin)

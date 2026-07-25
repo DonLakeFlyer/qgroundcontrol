@@ -4,6 +4,12 @@
 #include "QGCLoggingCategory.h"
 #include "Platform.h"
 
+#ifdef Q_OS_ANDROID
+    #include <QtGui/QGuiApplication>
+    #include <QtQml/QQmlApplicationEngine>
+    #include <QtQuickControls2/QQuickStyle>
+#endif
+
 #ifdef QGC_UNITTEST_BUILD
     #include "UnitTestList.h"
 #endif
@@ -12,6 +18,15 @@ QGC_LOGGING_CATEGORY_ON(MainLog, "Main")
 
 int main(int argc, char *argv[])
 {
+#ifdef Q_OS_ANDROID
+    // HACK: AX12 debugging - literal clone of window-test main(); no QGC code at all
+    QGuiApplication cloneApp(argc, argv);
+    QQuickStyle::setStyle(QStringLiteral("Basic"));
+    QQmlApplicationEngine cloneEngine;
+    cloneEngine.load(QUrl(QStringLiteral("qrc:/qml/QGroundControl/MainWindowStripped.qml")));
+    return cloneApp.exec();
+#endif
+
     // --- Parse command line arguments ---
     const auto args = QGCCommandLineParser::parse(argc, argv);
     if (const auto exitCode = QGCCommandLineParser::handleParseResult(args)) {
@@ -28,6 +43,12 @@ int main(int argc, char *argv[])
     LogManager::installHandler(args.logOutput);
 
     Platform::setupPostApp();
+
+#ifdef Q_OS_ANDROID
+    // HACK: AX12 debugging - load stripped window immediately, before heavy init
+    QQmlApplicationEngine earlyEngine;
+    earlyEngine.load(QUrl(QStringLiteral("qrc:/qml/QGroundControl/MainWindowStripped.qml")));
+#endif
 
     app.init();
 

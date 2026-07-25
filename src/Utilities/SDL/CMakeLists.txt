@@ -29,8 +29,9 @@ else()
 endif()
 
 if(ANDROID)
-    set(SDL_SHARED_FLAG "ON")
-    set(SDL_STATIC_FLAG "OFF")
+    # HACK: AX12 debugging - build SDL static so its libSDL3.so JNI_OnLoad doesn't auto-run at load
+    set(SDL_SHARED_FLAG "OFF")
+    set(SDL_STATIC_FLAG "ON")
     set(SDL_EXTRA_OPTIONS
         ${SDL_EXTRA_OPTIONS}
         "SDL_ANDROID_JAR OFF"
@@ -77,7 +78,8 @@ CPMAddPackage(
 qgc_require_cpm_added(SDL3)
 
 if(ANDROID)
-    set(_qgc_sdl3_target SDL3-shared)
+    # HACK: AX12 debugging - SDL now static on Android
+    set(_qgc_sdl3_target SDL3-static)
 else()
     set(_qgc_sdl3_target SDL3-static)
 endif()
@@ -94,9 +96,10 @@ set_target_properties(${_qgc_sdl3_target} PROPERTIES
 set_property(DIRECTORY "${SDL3_SOURCE_DIR}" PROPERTY QT_EXCLUDE_FROM_TRANSLATION ON)
 
 if(ANDROID)
-    target_compile_definitions(SDL3-shared PRIVATE SDL_MAIN_NOIMPL SDL_MAIN_HANDLED)
-    target_link_libraries(SDL3-shared PRIVATE log android)
-    set(QGC_SDL3_TARGET SDL3::SDL3-shared)
+    # HACK: AX12 debugging - SDL now static on Android
+    target_compile_definitions(SDL3-static PRIVATE SDL_MAIN_NOIMPL SDL_MAIN_HANDLED)
+    target_link_libraries(SDL3-static PRIVATE log android)
+    set(QGC_SDL3_TARGET SDL3::SDL3-static)
 else()
     target_compile_definitions(SDL3-static PRIVATE SDL_MAIN_NOIMPL SDL_MAIN_HANDLED)
     set(QGC_SDL3_TARGET SDL3::SDL3-static)
@@ -146,11 +149,12 @@ qt_add_resources(QGCSDL "qgcresources_sdl"
 
 target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE QGCSDL)
 
-if(ANDROID)
-    set_property(
-        TARGET ${CMAKE_PROJECT_NAME}
-        APPEND
-        PROPERTY
-            QT_ANDROID_EXTRA_LIBS "$<TARGET_FILE:SDL3-shared>"
-    )
-endif()
+# HACK: AX12 debugging - SDL is static on Android now; no shared lib to bundle
+#if(ANDROID)
+#    set_property(
+#        TARGET ${CMAKE_PROJECT_NAME}
+#        APPEND
+#        PROPERTY
+#            QT_ANDROID_EXTRA_LIBS "$<TARGET_FILE:SDL3-shared>"
+#    )
+#endif()

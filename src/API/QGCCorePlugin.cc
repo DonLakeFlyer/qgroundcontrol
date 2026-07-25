@@ -293,7 +293,9 @@ QQmlApplicationEngine *QGCCorePlugin::createQmlApplicationEngine(QObject *parent
 
 void QGCCorePlugin::createRootWindow(QQmlApplicationEngine *qmlEngine)
 {
-    qmlEngine->load(QUrl(QStringLiteral("qrc:/qml/QGroundControl/MainWindow.qml")));
+    // HACK: AX12 debugging - window is loaded early in main(); skip late load
+    Q_UNUSED(qmlEngine);
+    // qmlEngine->load(QUrl(QStringLiteral("qrc:/qml/QGroundControl/MainWindowStripped.qml")));
 }
 
 VideoReceiver *QGCCorePlugin::createVideoReceiver(QObject *parent)

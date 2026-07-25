@@ -37,6 +37,7 @@ add_subdirectory(Memory)
 add_subdirectory(Network)
 add_subdirectory(Parsing)
 add_subdirectory(Platform)
-add_subdirectory(SDL)
+# HACK: AX12 debugging - SDL pulled out completely to test load-time render bug
+# add_subdirectory(SDL)
 add_subdirectory(Sensors)
 add_subdirectory(StateMachine)

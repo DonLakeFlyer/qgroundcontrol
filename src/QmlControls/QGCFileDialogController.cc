@@ -5,7 +5,7 @@
 
 #include <QtCore/QDir>
 
-#ifdef Q_OS_ANDROID
+#if defined(Q_OS_ANDROID) && !defined(QGC_NO_ANDROID_MODULE)
 #include <QtCore/QPointer>
 #include "AndroidInterface.h"
 #endif
@@ -165,7 +165,7 @@ QString QGCFileDialogController::urlToLocalFile(QUrl url)
 
 void QGCFileDialogController::importFromNativePicker()
 {
-#ifdef Q_OS_ANDROID
+#if defined(Q_OS_ANDROID) && !defined(QGC_NO_ANDROID_MODULE)
     const QString missionPath = SettingsManager::instance()->appSettings()->missionSavePath();
     if (missionPath.isEmpty()) {
         qCWarning(QGCFileDialogControllerLog) << "Missions save path is empty";

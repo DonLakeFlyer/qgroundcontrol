@@ -58,7 +58,7 @@ else()
             SerialLink.h
     )
 
-    if(NOT ANDROID)
+    if(NOT ANDROID OR QGC_NO_ANDROID_MODULE)
         target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE Qt6::SerialPort)
     endif()
 endif()

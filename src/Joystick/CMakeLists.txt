@@ -13,8 +13,9 @@ target_sources(${CMAKE_PROJECT_NAME}
 
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
-target_sources(${CMAKE_PROJECT_NAME}
-    PRIVATE
-        JoystickSDL.cc
-        JoystickSDL.h
-)
+# HACK: AX12 debugging - SDL pulled out completely, so the SDL joystick backend is disabled
+# target_sources(${CMAKE_PROJECT_NAME}
+#     PRIVATE
+#         JoystickSDL.cc
+#         JoystickSDL.h
+# )

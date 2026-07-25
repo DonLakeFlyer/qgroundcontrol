@@ -10,7 +10,7 @@
 
 #include "QGCCommandLineParser.h"
 
-#ifdef Q_OS_ANDROID
+#if defined(Q_OS_ANDROID) && !defined(QGC_NO_ANDROID_MODULE)
     #include "AndroidInterface.h"
 #endif
 
@@ -231,7 +231,8 @@ std::optional<int> Platform::initialize(int argc, char* argv[],
 #endif
 
     // GStreamer's GL/DMABuf zero-copy paths both need QOpenGLContext::globalShareContext(), which this attribute enables.
-#if defined(QGC_HAS_GST_GLMEMORY_GPU_PATH) || defined(QGC_HAS_GST_DMABUF_GPU_PATH)
+#if (defined(QGC_HAS_GST_GLMEMORY_GPU_PATH) || defined(QGC_HAS_GST_DMABUF_GPU_PATH)) && !defined(Q_OS_ANDROID)
+    // HACK: AX12 debugging - skip AA_ShareOpenGLContexts on Android
     QCoreApplication::setAttribute(Qt::AA_ShareOpenGLContexts);
 #endif
     QCoreApplication::setAttribute(Qt::AA_CompressTabletEvents);
@@ -246,7 +247,7 @@ void Platform::setupPostApp()
     (void) signalHandler->setupSignalHandlers();
 #endif
 
-#ifdef Q_OS_ANDROID
+#if defined(Q_OS_ANDROID) && !defined(QGC_NO_ANDROID_MODULE)
     AndroidInterface::checkStoragePermissions();
 #endif
 }

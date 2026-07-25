@@ -119,6 +119,9 @@ void setNativeMethods()
 
 bool checkStoragePermissions()
 {
+    // HACK: AX12 debugging - no QGC Java classes; pretend granted
+    return true;
+
     const bool hasPermission =
         QJniObject::callStaticMethod<jboolean>(kJniQGCActivityClassName, "checkStoragePermissions", "()Z");
     QJniEnvironment env;
@@ -138,6 +141,9 @@ bool checkStoragePermissions()
 
 QString getSDCardPath()
 {
+    // HACK: AX12 debugging - no QGC Java classes
+    return QString();
+
     if (!checkStoragePermissions()) {
         qCWarning(AndroidInterfaceLog) << "Storage Permission Denied";
         return QString();

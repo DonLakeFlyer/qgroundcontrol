@@ -353,7 +353,10 @@ void QGCApplication::_initForNormalAppBoot()
     LinkManager::instance()->loadLinkConfigurationList();
 
     // Probe for joysticks
+    // HACK: AX12 debugging - no QGC Java classes; SDL Java glue missing, skip joystick init
+#ifndef Q_OS_ANDROID
     JoystickManager::instance()->init();
+#endif
 
     if (_settingsUpgraded) {
         showAppMessage(tr("The format for %1 saved settings has been modified. "
