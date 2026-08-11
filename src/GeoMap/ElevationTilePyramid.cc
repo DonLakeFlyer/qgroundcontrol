@@ -11,23 +11,9 @@
 
 #include <utility>
 
-namespace {
-
-/// Slippy domain check: zoom bounds also cap the ancestor-shift distance below UB
-bool keyInRange(const TileMath::TileKey& key)
-{
-    if ((key.zoom < TileMath::kMinZoom) || (key.zoom > TileMath::kMaxZoom)) {
-        return false;
-    }
-    const int tilesAtZoom = 1 << key.zoom;
-    return (key.x >= 0) && (key.x < tilesAtZoom) && (key.y >= 0) && (key.y < tilesAtZoom);
-}
-
-}  // namespace
-
 bool ElevationTilePyramid::insertTile(const TileMath::TileKey& key, Grid grid)
 {
-    if (!keyInRange(key) || !grid.isValid()) {
+    if (!TileMath::isValidKey(key) || !grid.isValid()) {
         return false;
     }
     _tiles.insert(key, std::move(grid));
@@ -36,7 +22,8 @@ bool ElevationTilePyramid::insertTile(const TileMath::TileKey& key, Grid grid)
 
 ElevationTilePyramid::View ElevationTilePyramid::bestTileFor(const TileMath::TileKey& key) const
 {
-    if (!keyInRange(key)) {
+    // Valid zoom bounds also cap the ancestor-shift distance below UB
+    if (!TileMath::isValidKey(key)) {
         return View{};
     }
     for (int zoom = key.zoom; zoom >= TileMath::kMinZoom; zoom--) {

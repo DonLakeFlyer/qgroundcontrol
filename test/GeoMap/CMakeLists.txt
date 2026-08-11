@@ -13,6 +13,8 @@ target_sources(${CMAKE_PROJECT_NAME}
         GeoSceneTest.h
         GeoMapCameraTest.cc
         GeoMapCameraTest.h
+        HeightFieldTest.cc
+        HeightFieldTest.h
         HeightSourceTest.cc
         HeightSourceTest.h
         PatchGeometryTest.cc
@@ -41,6 +43,7 @@ add_qgc_test(CheckerboardTextureDataTest LABELS Unit)
 add_qgc_test(ElevationTilePyramidTest LABELS Unit)
 add_qgc_test(GeoSceneTest LABELS Unit)
 add_qgc_test(GeoMapCameraTest LABELS Unit)
+add_qgc_test(HeightFieldTest LABELS Unit)
 add_qgc_test(HeightSourceTest LABELS Unit)
 add_qgc_test(PatchGeometryTest LABELS Unit)
 add_qgc_test(PatchTextureDataTest LABELS Unit)

@@ -53,6 +53,9 @@ namespace TileMath {
 /// Full mercator world extent (2*pi*R) in world meters
 double worldSize();
 
+/// True if zoom is within [kMinZoom, kMaxZoom] and x/y address a tile at that zoom
+bool isValidKey(const TileKey& key);
+
 /// Geo -> world meters. Latitude is clamped to +/-kMaxLatitude.
 QPointF geoToWorld(const QGeoCoordinate& coord);
 
