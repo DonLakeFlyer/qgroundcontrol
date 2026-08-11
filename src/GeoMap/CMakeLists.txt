@@ -5,6 +5,8 @@
 
 target_sources(${CMAKE_PROJECT_NAME}
     PRIVATE
+        ElevationTilePyramid.cc
+        ElevationTilePyramid.h
         HeightSource.cc
         HeightSource.h
         SurfaceAnalysis.cc
