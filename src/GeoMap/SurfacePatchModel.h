@@ -74,7 +74,7 @@ public:
 
     bool terrain() const { return _terrain; }
 
-    /// Real terrain elevations (see TerrariumHeightSource);
+    /// Real terrain elevations (see TerrariumTileFetcher);
     /// false gives a flat z=0 surface. debugHills overrides either.
     void setTerrain(bool terrain);
 

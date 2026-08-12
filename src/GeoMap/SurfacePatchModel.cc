@@ -8,6 +8,7 @@
 #include <QtCore/QTimer>
 #include <QtCore/QtMath>
 #include <QtGui/QPainter>
+
 #include <algorithm>
 #include <cmath>
 #include <utility>
@@ -17,7 +18,7 @@
 #include "HeightSource.h"
 #include "SurfaceAnalysis.h"
 #include "SurfaceModel.h"
-#include "TerrariumHeightSource.h"
+#include "TerrariumTileFetcher.h"
 #include "TileImageSource.h"
 
 SurfacePatchModel::SurfacePatchModel(QObject* parent) : QAbstractListModel(parent) {}
@@ -238,7 +239,7 @@ void SurfacePatchModel::_rebuildSurfaceModel()
         if (_debugHills) {
             _heightSource = new DebugHeightSource(this);
         } else if (_terrain) {
-            _heightSource = new TerrariumHeightSource(this);
+            _heightSource = new TerrariumTileFetcher(this);
         } else {
             _heightSource = new FlatHeightSource(this);
         }

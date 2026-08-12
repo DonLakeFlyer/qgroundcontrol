@@ -22,7 +22,7 @@
 /// the north-west corner. Results are always delivered asynchronously (queued), even
 /// for sources that can answer immediately, so consumers see one consistent flow.
 ///
-/// TerrariumHeightSource adapts the terrarium elevation tile source behind this interface.
+/// TerrariumTileFetcher adapts the terrarium elevation tile source behind this interface.
 class HeightSource : public QObject
 {
     Q_OBJECT

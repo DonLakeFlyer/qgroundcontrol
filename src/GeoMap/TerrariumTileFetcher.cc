@@ -7,21 +7,26 @@
  *
  ****************************************************************************/
 
-#include "TerrariumHeightSource.h"
+#include "TerrariumTileFetcher.h"
 
 #include <QtGui/QImage>
 #include <QtNetwork/QNetworkAccessManager>
 #include <QtNetwork/QNetworkReply>
+
 #include <cmath>
 #include <memory>
 
 #include "ElevationMapProvider.h"
+#include "HeightField.h"
 #include "QGCCacheTile.h"
+#include "QGCLoggingCategory.h"
 #include "QGCMapEngine.h"
 #include "QGCMapTasks.h"
 #include "QGCMapUrlEngine.h"
 #include "QGeoFileTileCacheQGC.h"
 #include "QGeoTileFetcherQGC.h"
+
+QGC_LOGGING_CATEGORY(GeoMapTerrariumTileFetcherLog, "GeoMap.TerrariumTileFetcher")
 
 namespace {
 
@@ -87,19 +92,48 @@ QImage decodeTile(const QByteArray& data)
     return image.convertToFormat(QImage::Format_RGB32);
 }
 
+/// Full-tile decode to a pyramid grid, row-major from the NW corner
+ElevationTilePyramid::Grid gridFromImage(const QImage& image)
+{
+    ElevationTilePyramid::Grid grid;
+    grid.width = image.width();
+    grid.height = image.height();
+    grid.heights.reserve(qsizetype(grid.width) * grid.height);
+    for (int py = 0; py < grid.height; py++) {
+        for (int px = 0; px < grid.width; px++) {
+            grid.heights.append(static_cast<float>(heightAtPixel(image, px, py)));
+        }
+    }
+    return grid;
+}
+
+/// Tile actually fetched for a key: the key itself, or its ancestor at the
+/// dataset's top zoom for deeper keys
+TileMath::TileKey fetchKeyFor(const TileMath::TileKey& key)
+{
+    if (key.zoom <= TerrariumTileFetcher::kMaxTileZoom) {
+        return key;
+    }
+    const int shift = key.zoom - TerrariumTileFetcher::kMaxTileZoom;
+    return TileMath::TileKey{key.x >> shift, key.y >> shift, TerrariumTileFetcher::kMaxTileZoom};
+}
+
 }  // namespace
 
-TerrariumHeightSource::TerrariumHeightSource(QObject* parent, QNetworkAccessManager* networkManager)
+TerrariumTileFetcher::TerrariumTileFetcher(QObject* parent, QNetworkAccessManager* networkManager)
     : HeightSource(parent),
       _networkManager(networkManager ? networkManager : new QNetworkAccessManager(this)),
       _mapId(UrlFactory::getQtMapIdFromProviderType(terrariumProviderType()))
 {}
 
-int TerrariumHeightSource::requestPatchHeights(const TileMath::TileKey& key, int gridSize)
+int TerrariumTileFetcher::requestPatchHeights(const TileMath::TileKey& key, int gridSize)
 {
     const int requestId = _nextRequestId();
 
-    if ((gridSize <= 0) || (_mapId < 0)) {
+    if (gridSize > kMaxGridSize) {
+        qCWarning(GeoMapTerrariumTileFetcherLog) << "gridSize" << gridSize << "exceeds maximum" << kMaxGridSize;
+    }
+    if ((gridSize <= 0) || (gridSize > kMaxGridSize) || (_mapId < 0) || !TileMath::isValidKey(key)) {
         _pending.insert(requestId, PendingRequest{});
         _failAsync(requestId);
         return requestId;
@@ -109,12 +143,11 @@ int TerrariumHeightSource::requestPatchHeights(const TileMath::TileKey& key, int
     // patch's sub-window of it
     PendingRequest pending;
     pending.gridSize = gridSize;
+    pending.fetchKey = fetchKeyFor(key);
     if (key.zoom <= kMaxTileZoom) {
-        pending.fetchKey = key;
         pending.subWindow = QRectF(0, 0, 1, 1);
     } else {
         const int shift = key.zoom - kMaxTileZoom;
-        pending.fetchKey = TileMath::TileKey{key.x >> shift, key.y >> shift, kMaxTileZoom};
         const double scale = 1.0 / (1 << shift);
         pending.subWindow = QRectF((key.x - (pending.fetchKey.x << shift)) * scale,
                                    (key.y - (pending.fetchKey.y << shift)) * scale, scale, scale);
@@ -122,20 +155,58 @@ int TerrariumHeightSource::requestPatchHeights(const TileMath::TileKey& key, int
     _pending.insert(requestId, pending);
     _lastFetchKey = pending.fetchKey;
 
-    QList<int>& waiters = _waiters[pending.fetchKey];
-    waiters.append(requestId);
-    if (waiters.size() > 1) {
+    const bool inFlight = _fetchInFlight(pending.fetchKey);
+    _waiters[pending.fetchKey].append(requestId);
+    if (inFlight) {
         return requestId;  // a fetch for this tile is already in flight; it serves all waiters
     }
 
+    if (!_startFetch(pending.fetchKey)) {
+        _waiters.remove(pending.fetchKey);
+        _failAsync(requestId);
+    }
+    return requestId;
+}
+
+bool TerrariumTileFetcher::requestTile(const TileMath::TileKey& key)
+{
+    if (!_heightField || (_mapId < 0) || !TileMath::isValidKey(key)) {
+        return false;
+    }
+
+    const TileMath::TileKey fetchKey = fetchKeyFor(key);
+    if (_heightField->hasTile(fetchKey) || _fieldRequests.contains(fetchKey)) {
+        return true;
+    }
+
+    const bool inFlight = _fetchInFlight(fetchKey);
+    _fieldRequests.insert(fetchKey);
+    _lastFetchKey = fetchKey;
+    if (inFlight) {
+        return true;  // piggyback on the fetch already serving patch waiters
+    }
+
+    if (!_startFetch(fetchKey)) {
+        _fieldRequests.remove(fetchKey);
+        return false;
+    }
+    return true;
+}
+
+bool TerrariumTileFetcher::_fetchInFlight(const TileMath::TileKey& fetchKey) const
+{
+    return _waiters.contains(fetchKey) || _fieldRequests.contains(fetchKey);
+}
+
+bool TerrariumTileFetcher::_startFetch(const TileMath::TileKey& fetchKey)
+{
     const QString providerType = terrariumProviderType();
-    QGCFetchTileTask* const task = QGeoFileTileCacheQGC::createFetchTileTask(providerType, pending.fetchKey.x,
-                                                                             pending.fetchKey.y, pending.fetchKey.zoom);
-    const TileMath::TileKey fetchKey = pending.fetchKey;
+    QGCFetchTileTask* const task =
+        QGeoFileTileCacheQGC::createFetchTileTask(providerType, fetchKey.x, fetchKey.y, fetchKey.zoom);
     connect(task, &QGCFetchTileTask::tileFetched, this, [this, fetchKey](QGCCacheTile* tile) {
         const std::unique_ptr<QGCCacheTile> guard(tile);  // caller-owned per task contract
-        if (!_waiters.contains(fetchKey)) {
-            return;                                       // all waiters cancelled while the lookup was in flight
+        if (!_fetchInFlight(fetchKey)) {
+            return;                                       // all interest cancelled while the lookup was in flight
         }
         if (!tile || tile->img.isEmpty()) {
             _failAll(fetchKey);
@@ -149,7 +220,7 @@ int TerrariumHeightSource::requestPatchHeights(const TileMath::TileKey& key, int
         _deliverAll(fetchKey, image);
     });
     connect(task, &QGCMapTask::error, this, [this, fetchKey](QGCMapTask::TaskType, const QString&) {
-        if (!_waiters.contains(fetchKey)) {
+        if (!_fetchInFlight(fetchKey)) {
             return;
         }
         _fetchFromNetwork(fetchKey);
@@ -157,13 +228,12 @@ int TerrariumHeightSource::requestPatchHeights(const TileMath::TileKey& key, int
 
     if (!getQGCMapEngine()->addTask(task)) {
         task->deleteLater();  // never enqueued: the worker will not clean it up
-        _waiters.remove(fetchKey);
-        _failAsync(requestId);
+        return false;
     }
-    return requestId;
+    return true;
 }
 
-void TerrariumHeightSource::cancelRequest(int requestId)
+void TerrariumTileFetcher::cancelRequest(int requestId)
 {
     const auto pendingIt = _pending.constFind(requestId);
     if (pendingIt == _pending.cend()) {
@@ -181,13 +251,17 @@ void TerrariumHeightSource::cancelRequest(int requestId)
         return;  // other requests still wait on this tile's fetch
     }
     _waiters.erase(waitersIt);
+    if (_fieldRequests.contains(fetchKey)) {
+        return;  // the field still wants this tile: keep the fetch alive
+    }
     QNetworkReply* const reply = _activeReplies.take(fetchKey);
     if (reply) {
-        reply->abort();  // finished handler is a no-op once no waiters remain
+        reply->abort();        // finished handler is a no-op once no waiters remain
+        reply->deleteLater();  // don't rely on abort emitting finished for cleanup
     }
 }
 
-void TerrariumHeightSource::_failAsync(int requestId)
+void TerrariumTileFetcher::_failAsync(int requestId)
 {
     // Deliver asynchronously so callers see one consistent flow
     QMetaObject::invokeMethod(
@@ -200,7 +274,7 @@ void TerrariumHeightSource::_failAsync(int requestId)
         Qt::QueuedConnection);
 }
 
-void TerrariumHeightSource::_fetchFromNetwork(const TileMath::TileKey& fetchKey)
+void TerrariumTileFetcher::_fetchFromNetwork(const TileMath::TileKey& fetchKey)
 {
     if (_activeReplies.contains(fetchKey)) {
         return;  // a reply is already in flight for this tile
@@ -216,8 +290,8 @@ void TerrariumHeightSource::_fetchFromNetwork(const TileMath::TileKey& fetchKey)
             return;  // stale: cancelled (and possibly superseded by a newer fetch)
         }
         _activeReplies.remove(fetchKey);
-        if (!_waiters.contains(fetchKey)) {
-            return;  // all waiters cancelled (abort also lands here)
+        if (!_fetchInFlight(fetchKey)) {
+            return;  // all interest cancelled (abort also lands here)
         }
         if (reply->error() != QNetworkReply::NoError) {
             _failAll(fetchKey);
@@ -243,8 +317,12 @@ void TerrariumHeightSource::_fetchFromNetwork(const TileMath::TileKey& fetchKey)
     });
 }
 
-void TerrariumHeightSource::_deliverAll(const TileMath::TileKey& fetchKey, const QImage& image)
+void TerrariumTileFetcher::_deliverAll(const TileMath::TileKey& fetchKey, const QImage& image)
 {
+    if (_fieldRequests.remove(fetchKey) && _heightField) {
+        _heightField->insertTile(fetchKey, gridFromImage(image));
+    }
+
     const QList<int> requestIds = _waiters.take(fetchKey);
     for (int requestId : requestIds) {
         if (_pending.contains(requestId)) {
@@ -253,8 +331,12 @@ void TerrariumHeightSource::_deliverAll(const TileMath::TileKey& fetchKey, const
     }
 }
 
-void TerrariumHeightSource::_failAll(const TileMath::TileKey& fetchKey)
+void TerrariumTileFetcher::_failAll(const TileMath::TileKey& fetchKey)
 {
+    // A failed tile inserts nothing: the field keeps its current estimate, and
+    // clearing the in-flight key lets a later request retry
+    _fieldRequests.remove(fetchKey);
+
     const QList<int> requestIds = _waiters.take(fetchKey);
     for (int requestId : requestIds) {
         if (_pending.contains(requestId)) {
@@ -263,13 +345,13 @@ void TerrariumHeightSource::_failAll(const TileMath::TileKey& fetchKey)
     }
 }
 
-void TerrariumHeightSource::_deliver(int requestId, const QImage& image)
+void TerrariumTileFetcher::_deliver(int requestId, const QImage& image)
 {
     const PendingRequest pending = _pending.take(requestId);
     emit patchHeightsReady(requestId, sampleGrid(image, pending.subWindow, pending.gridSize));
 }
 
-void TerrariumHeightSource::_finishFailed(int requestId)
+void TerrariumTileFetcher::_finishFailed(int requestId)
 {
     _pending.remove(requestId);
     emit patchHeightsFailed(requestId);

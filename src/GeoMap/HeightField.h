@@ -52,6 +52,9 @@ public:
 
     int tileCount() const { return _pyramid.tileCount(); }
 
+    /// True when the backing pyramid holds this exact tile
+    bool hasTile(const TileMath::TileKey& key) const { return _pyramid.hasTile(key); }
+
 signals:
     /// Best-estimate heights changed within this rect (TileMath world meters,
     /// y north; min-corner + positive spans — don't use top()/bottom()).

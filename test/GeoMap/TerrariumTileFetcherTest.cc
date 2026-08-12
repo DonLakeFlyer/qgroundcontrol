@@ -1,15 +1,21 @@
-#include "TerrariumHeightSourceTest.h"
+#include "TerrariumTileFetcherTest.h"
 
 #include <QtCore/QBuffer>
+#include <QtCore/QPointer>
+#include <QtCore/QRegularExpression>
 #include <QtCore/QScopeGuard>
 #include <QtCore/QTimer>
 #include <QtGui/QImage>
 #include <QtNetwork/QNetworkAccessManager>
 #include <QtNetwork/QNetworkReply>
 #include <QtTest/QSignalSpy>
-#include <algorithm>
 
-#include "TerrariumHeightSource.h"
+#include <algorithm>
+#include <cstring>
+#include <limits>
+
+#include "HeightField.h"
+#include "TerrariumTileFetcher.h"
 #include "TileMath.h"
 #include "UnitTestTileGenerator.h"
 
@@ -93,8 +99,8 @@ public:
 
     QByteArray body;
     int requestCount = 0;
-    bool holdReplies = false;      ///< replies stay open until finished manually
-    QList<CannedReply*> replies;   ///< creation order, only tracked while holding
+    bool holdReplies = false;     ///< replies stay open until finished manually
+    QList<CannedReply*> replies;  ///< creation order, only tracked while holding
 
 protected:
     QNetworkReply* createRequest(Operation, const QNetworkRequest& request, QIODevice*) final
@@ -109,9 +115,9 @@ protected:
 };
 }  // namespace
 
-void TerrariumHeightSourceTest::_deliversFlatRegionHeights()
+void TerrariumTileFetcherTest::_deliversFlatRegionHeights()
 {
-    TerrariumHeightSource source;
+    TerrariumTileFetcher source;
     QSignalSpy readySpy(&source, &HeightSource::patchHeightsReady);
     QSignalSpy failedSpy(&source, &HeightSource::patchHeightsFailed);
 
@@ -132,9 +138,9 @@ void TerrariumHeightSourceTest::_deliversFlatRegionHeights()
     }
 }
 
-void TerrariumHeightSourceTest::_deliversSlopeRegionHeights()
+void TerrariumTileFetcherTest::_deliversSlopeRegionHeights()
 {
-    TerrariumHeightSource source;
+    TerrariumTileFetcher source;
     QSignalSpy readySpy(&source, &HeightSource::patchHeightsReady);
 
     source.requestPatchHeights(keyOver(linearSlopeRegion().center(), kFineZoom), kGridSize);
@@ -158,11 +164,11 @@ void TerrariumHeightSourceTest::_deliversSlopeRegionHeights()
     }
 }
 
-void TerrariumHeightSourceTest::_coarseZoomDeliversRealTerrain()
+void TerrariumTileFetcherTest::_coarseZoomDeliversRealTerrain()
 {
     // Terrarium serves one tile per patch at any zoom, so coarse patches get real
     // terrain — no flat floor or blend band (the old TerrainHeightSource fetch-storm hack)
-    TerrariumHeightSource source;
+    TerrariumTileFetcher source;
     QSignalSpy readySpy(&source, &HeightSource::patchHeightsReady);
     QSignalSpy failedSpy(&source, &HeightSource::patchHeightsFailed);
 
@@ -183,11 +189,11 @@ void TerrariumHeightSourceTest::_coarseZoomDeliversRealTerrain()
     QCOMPARE_GE(maxHeight, static_cast<float>(UnitTestTerrainData::Flat10Region::amslElevation));
 }
 
-void TerrariumHeightSourceTest::_deepZoomSamplesAncestorTile()
+void TerrariumTileFetcherTest::_deepZoomSamplesAncestorTile()
 {
     // The dataset tops out at z15: deeper patches must fetch the z15 ancestor and
     // sample its sub-window instead of requesting tiles that don't exist
-    TerrariumHeightSource source;
+    TerrariumTileFetcher source;
     QSignalSpy readySpy(&source, &HeightSource::patchHeightsReady);
 
     constexpr int deepZoom = 18;
@@ -195,9 +201,9 @@ void TerrariumHeightSourceTest::_deepZoomSamplesAncestorTile()
     source.requestPatchHeights(key, kGridSize);
 
     const TileMath::TileKey fetched = source.lastFetchKey();
-    QCOMPARE(fetched.zoom, TerrariumHeightSource::kMaxTileZoom);
-    QCOMPARE(fetched.x, key.x >> (deepZoom - TerrariumHeightSource::kMaxTileZoom));
-    QCOMPARE(fetched.y, key.y >> (deepZoom - TerrariumHeightSource::kMaxTileZoom));
+    QCOMPARE(fetched.zoom, TerrariumTileFetcher::kMaxTileZoom);
+    QCOMPARE(fetched.x, key.x >> (deepZoom - TerrariumTileFetcher::kMaxTileZoom));
+    QCOMPARE(fetched.y, key.y >> (deepZoom - TerrariumTileFetcher::kMaxTileZoom));
 
     QTRY_COMPARE_WITH_TIMEOUT(readySpy.count(), 1, TestTimeout::mediumMs());
     const auto heights = readySpy.first().at(1).value<QList<float>>();
@@ -207,9 +213,9 @@ void TerrariumHeightSourceTest::_deepZoomSamplesAncestorTile()
     }
 }
 
-void TerrariumHeightSourceTest::_cancelPreventsDelivery()
+void TerrariumTileFetcherTest::_cancelPreventsDelivery()
 {
-    TerrariumHeightSource source;
+    TerrariumTileFetcher source;
     QSignalSpy readySpy(&source, &HeightSource::patchHeightsReady);
     QSignalSpy failedSpy(&source, &HeightSource::patchHeightsFailed);
 
@@ -220,9 +226,9 @@ void TerrariumHeightSourceTest::_cancelPreventsDelivery()
     QVERIFY(failedSpy.isEmpty());
 }
 
-void TerrariumHeightSourceTest::_invalidGridSizeFails()
+void TerrariumTileFetcherTest::_invalidGridSizeFails()
 {
-    TerrariumHeightSource source;
+    TerrariumTileFetcher source;
     QSignalSpy readySpy(&source, &HeightSource::patchHeightsReady);
     QSignalSpy failedSpy(&source, &HeightSource::patchHeightsFailed);
 
@@ -235,7 +241,46 @@ void TerrariumHeightSourceTest::_invalidGridSizeFails()
     QVERIFY(readySpy.isEmpty());
 }
 
-void TerrariumHeightSourceTest::_networkFallbackDeliversAndCaches()
+void TerrariumTileFetcherTest::_oversizeGridSizeFails()
+{
+    // A gridSize beyond the supported maximum is a programming error: warn and
+    // fail async like the other invalid inputs
+    MockNam nam;
+    TerrariumTileFetcher source(nullptr, &nam);
+    QSignalSpy readySpy(&source, &HeightSource::patchHeightsReady);
+    QSignalSpy failedSpy(&source, &HeightSource::patchHeightsFailed);
+
+    expectLogMessage("GeoMap.TerrariumTileFetcher", QtWarningMsg, QRegularExpression(QStringLiteral("gridSize")));
+    const int requestId =
+        source.requestPatchHeights(keyOver(flat10Region().center(), kFineZoom), TerrariumTileFetcher::kMaxGridSize + 1);
+    verifyExpectedLogMessage();
+    QCOMPARE_GT(requestId, 0);
+
+    QTRY_COMPARE_WITH_TIMEOUT(failedSpy.count(), 1, TestTimeout::mediumMs());
+    QCOMPARE(failedSpy.first().at(0).toInt(), requestId);
+    QVERIFY(readySpy.isEmpty());
+    QCOMPARE(nam.requestCount, 0);
+}
+
+void TerrariumTileFetcherTest::_invalidKeyFails()
+{
+    // An invalid key must fail asynchronously before any shift arithmetic or
+    // fetch machinery runs
+    MockNam nam;
+    TerrariumTileFetcher source(nullptr, &nam);
+    QSignalSpy readySpy(&source, &HeightSource::patchHeightsReady);
+    QSignalSpy failedSpy(&source, &HeightSource::patchHeightsFailed);
+
+    const int requestId = source.requestPatchHeights(TileMath::TileKey{0, 0, -1}, kGridSize);
+    QCOMPARE_GT(requestId, 0);
+
+    QTRY_COMPARE_WITH_TIMEOUT(failedSpy.count(), 1, TestTimeout::mediumMs());
+    QCOMPARE(failedSpy.first().at(0).toInt(), requestId);
+    QVERIFY(readySpy.isEmpty());
+    QCOMPARE(nam.requestCount, 0);
+}
+
+void TerrariumTileFetcherTest::_networkFallbackDeliversAndCaches()
 {
     // Distinct zoom from other tests: write-back puts this tile in the shared
     // per-process cache DB, which must not shadow other tests' generator path
@@ -244,7 +289,7 @@ void TerrariumHeightSourceTest::_networkFallbackDeliversAndCaches()
 
     MockNam nam;
     nam.body = UnitTestTileGenerator::syntheticTerrariumTileData(key.x, key.y, key.zoom);
-    TerrariumHeightSource source(nullptr, &nam);
+    TerrariumTileFetcher source(nullptr, &nam);
     QSignalSpy readySpy(&source, &HeightSource::patchHeightsReady);
 
     // Two forced generator misses: the first request must fall back to the
@@ -267,12 +312,12 @@ void TerrariumHeightSourceTest::_networkFallbackDeliversAndCaches()
     QCOMPARE(nam.requestCount, 1);  // cached by write-back: no second network fetch
 }
 
-void TerrariumHeightSourceTest::_networkErrorFails()
+void TerrariumTileFetcherTest::_networkErrorFails()
 {
     constexpr int zoom = 12;
 
     MockNam nam;  // empty body: canned network error
-    TerrariumHeightSource source(nullptr, &nam);
+    TerrariumTileFetcher source(nullptr, &nam);
     QSignalSpy readySpy(&source, &HeightSource::patchHeightsReady);
     QSignalSpy failedSpy(&source, &HeightSource::patchHeightsFailed);
 
@@ -286,7 +331,7 @@ void TerrariumHeightSourceTest::_networkErrorFails()
     QVERIFY(readySpy.isEmpty());
 }
 
-void TerrariumHeightSourceTest::_networkGarbageBodyFailsAndNotCached()
+void TerrariumTileFetcherTest::_networkGarbageBodyFailsAndNotCached()
 {
     // An HTTP-200 non-PNG body (e.g. an error page) must fail the request and
     // must NOT be written back to the cache
@@ -295,7 +340,7 @@ void TerrariumHeightSourceTest::_networkGarbageBodyFailsAndNotCached()
 
     MockNam nam;
     nam.body = QByteArrayLiteral("this is not a png");
-    TerrariumHeightSource source(nullptr, &nam);
+    TerrariumTileFetcher source(nullptr, &nam);
     QSignalSpy readySpy(&source, &HeightSource::patchHeightsReady);
     QSignalSpy failedSpy(&source, &HeightSource::patchHeightsFailed);
 
@@ -314,7 +359,7 @@ void TerrariumHeightSourceTest::_networkGarbageBodyFailsAndNotCached()
     QCOMPARE(nam.requestCount, 2);
 }
 
-void TerrariumHeightSourceTest::_networkWrongSizeImageFailsAndNotCached()
+void TerrariumTileFetcherTest::_networkWrongSizeImageFailsAndNotCached()
 {
     // A decodable body that isn't a 256x256 tile (e.g. a CDN placeholder image)
     // is not elevation data: it must fail delivery, and caching it would poison
@@ -329,7 +374,7 @@ void TerrariumHeightSourceTest::_networkWrongSizeImageFailsAndNotCached()
     QVERIFY(buffer.open(QIODevice::WriteOnly));
     QVERIFY(placeholder.save(&buffer, "PNG"));
 
-    TerrariumHeightSource source(nullptr, &nam);
+    TerrariumTileFetcher source(nullptr, &nam);
     QSignalSpy readySpy(&source, &HeightSource::patchHeightsReady);
     QSignalSpy failedSpy(&source, &HeightSource::patchHeightsFailed);
 
@@ -348,14 +393,14 @@ void TerrariumHeightSourceTest::_networkWrongSizeImageFailsAndNotCached()
     QCOMPARE(nam.requestCount, 2);
 }
 
-void TerrariumHeightSourceTest::_duplicateRequestsShareOneFetch()
+void TerrariumTileFetcherTest::_duplicateRequestsShareOneFetch()
 {
     constexpr int zoom = 10;
     const TileMath::TileKey key = keyOver(flat10Region().center(), zoom);
 
     MockNam nam;
     nam.body = UnitTestTileGenerator::syntheticTerrariumTileData(key.x, key.y, key.zoom);
-    TerrariumHeightSource source(nullptr, &nam);
+    TerrariumTileFetcher source(nullptr, &nam);
     QSignalSpy readySpy(&source, &HeightSource::patchHeightsReady);
 
     UnitTestTileGenerator::setForcedMissCount(2);
@@ -374,14 +419,14 @@ void TerrariumHeightSourceTest::_duplicateRequestsShareOneFetch()
     QCOMPARE(readyIds, expectedIds);
 }
 
-void TerrariumHeightSourceTest::_cancelOneWaiterKeepsSharedFetchAlive()
+void TerrariumTileFetcherTest::_cancelOneWaiterKeepsSharedFetchAlive()
 {
     constexpr int zoom = 9;
     const TileMath::TileKey key = keyOver(flat10Region().center(), zoom);
 
     MockNam nam;
     nam.body = UnitTestTileGenerator::syntheticTerrariumTileData(key.x, key.y, key.zoom);
-    TerrariumHeightSource source(nullptr, &nam);
+    TerrariumTileFetcher source(nullptr, &nam);
     QSignalSpy readySpy(&source, &HeightSource::patchHeightsReady);
     QSignalSpy failedSpy(&source, &HeightSource::patchHeightsFailed);
 
@@ -398,7 +443,30 @@ void TerrariumHeightSourceTest::_cancelOneWaiterKeepsSharedFetchAlive()
     QVERIFY(failedSpy.isEmpty());
 }
 
-void TerrariumHeightSourceTest::_staleCancelledReplyDoesNotFailNewRequest()
+void TerrariumTileFetcherTest::_cancelDestroysAbortedReply()
+{
+    // Cleanup must not rely on abort emitting finished (real QNetworkReply does,
+    // but it isn't guaranteed here — CannedReply::abort is a no-op)
+    constexpr int zoom = 1;
+    const TileMath::TileKey key = keyOver(flat10Region().center(), zoom);
+
+    MockNam nam;
+    nam.body = UnitTestTileGenerator::syntheticTerrariumTileData(key.x, key.y, key.zoom);
+    nam.holdReplies = true;
+    TerrariumTileFetcher source(nullptr, &nam);
+
+    UnitTestTileGenerator::setForcedMissCount(1);
+    const auto guard = qScopeGuard([] { UnitTestTileGenerator::setForcedMissCount(0); });
+
+    const int requestId = source.requestPatchHeights(key, kGridSize);
+    QTRY_COMPARE_WITH_TIMEOUT(nam.requestCount, 1, TestTimeout::mediumMs());
+
+    const QPointer<CannedReply> reply(nam.replies.at(0));
+    source.cancelRequest(requestId);
+    QTRY_VERIFY_WITH_TIMEOUT(reply.isNull(), TestTimeout::mediumMs());
+}
+
+void TerrariumTileFetcherTest::_staleCancelledReplyDoesNotFailNewRequest()
 {
     // A cancelled reply whose finished emission lands late must not touch the
     // state of a newer fetch for the same tile installed in the meantime
@@ -408,7 +476,7 @@ void TerrariumHeightSourceTest::_staleCancelledReplyDoesNotFailNewRequest()
     MockNam nam;
     nam.body = UnitTestTileGenerator::syntheticTerrariumTileData(key.x, key.y, key.zoom);
     nam.holdReplies = true;
-    TerrariumHeightSource source(nullptr, &nam);
+    TerrariumTileFetcher source(nullptr, &nam);
     QSignalSpy readySpy(&source, &HeightSource::patchHeightsReady);
     QSignalSpy failedSpy(&source, &HeightSource::patchHeightsFailed);
 
@@ -419,12 +487,14 @@ void TerrariumHeightSourceTest::_staleCancelledReplyDoesNotFailNewRequest()
     QTRY_COMPARE_WITH_TIMEOUT(nam.requestCount, 1, TestTimeout::mediumMs());
     source.cancelRequest(requestId1);
 
+    // Real QNetworkReply::abort() emits finished synchronously inside
+    // cancelRequest; deliver it now, while the reply is still alive
+    // (cancelRequest schedules deleteLater on it). The stale guard must
+    // ignore it and a new fetch for the same tile must deliver normally
+    nam.replies.at(0)->finishAsAborted();
+
     const int requestId2 = source.requestPatchHeights(key, kGridSize);
     QTRY_COMPARE_WITH_TIMEOUT(nam.requestCount, 2, TestTimeout::mediumMs());
-
-    // The stale reply's abort error arrives only now, after the new fetch owns
-    // the tile: it must be ignored, and the new reply must deliver normally
-    nam.replies.at(0)->finishAsAborted();
     nam.replies.at(1)->finishNormally();
 
     QTRY_COMPARE_WITH_TIMEOUT(readySpy.count(), 1, TestTimeout::mediumMs());
@@ -432,4 +502,176 @@ void TerrariumHeightSourceTest::_staleCancelledReplyDoesNotFailNewRequest()
     QVERIFY(failedSpy.isEmpty());
 }
 
-UT_REGISTER_TEST(TerrariumHeightSourceTest, TestLabel::Integration, TestLabel::Terrain)
+void TerrariumTileFetcherTest::_tileRequestPopulatesField()
+{
+    HeightField field;
+    TerrariumTileFetcher source;
+    source.setHeightField(&field);
+    QSignalSpy regionSpy(&field, &HeightField::regionChanged);
+    QVERIFY(regionSpy.isValid());
+
+    const TileMath::TileKey key = keyOver(flat10Region().center(), kFineZoom);
+    QVERIFY(source.requestTile(key));
+    QCOMPARE(field.tileCount(), 0);  // delivery is async, never re-entrant
+
+    QTRY_COMPARE_WITH_TIMEOUT(regionSpy.count(), 1, TestTimeout::mediumMs());
+    QCOMPARE(field.tileCount(), 1);
+
+    // 10m encodes exactly in terrarium quanta; bilinear blend of equal corners
+    // may differ by rounding only
+    const double height = field.heightAt(TileMath::geoToWorld(flat10Region().center()));
+    QCOMPARE_LT(qAbs(height - UnitTestTerrainData::Flat10Region::amslElevation), 0.01);
+}
+
+void TerrariumTileFetcherTest::_deepZoomTileRequestFetchesAncestor()
+{
+    // The dataset tops out at z15: a deeper tile request must fetch and store
+    // the z15 ancestor (the pyramid sub-windows it at sample time)
+    HeightField field;
+    TerrariumTileFetcher source;
+    source.setHeightField(&field);
+    QSignalSpy regionSpy(&field, &HeightField::regionChanged);
+
+    constexpr int deepZoom = 18;
+    const TileMath::TileKey key = keyOver(flat10Region().center(), deepZoom);
+    QVERIFY(source.requestTile(key));
+
+    const TileMath::TileKey fetched = source.lastFetchKey();
+    QCOMPARE(fetched.zoom, TerrariumTileFetcher::kMaxTileZoom);
+    QCOMPARE(fetched.x, key.x >> (deepZoom - TerrariumTileFetcher::kMaxTileZoom));
+    QCOMPARE(fetched.y, key.y >> (deepZoom - TerrariumTileFetcher::kMaxTileZoom));
+
+    QTRY_COMPARE_WITH_TIMEOUT(regionSpy.count(), 1, TestTimeout::mediumMs());
+    QCOMPARE(field.tileCount(), 1);
+    QCOMPARE(regionSpy[0][0].toRectF().width(), TileMath::tileSpanAtZoom(TerrariumTileFetcher::kMaxTileZoom));
+
+    const double height = field.heightAt(TileMath::geoToWorld(flat10Region().center()));
+    QCOMPARE_LT(qAbs(height - UnitTestTerrainData::Flat10Region::amslElevation), 0.01);
+}
+
+void TerrariumTileFetcherTest::_duplicateTileRequestsShareOneFetch()
+{
+    constexpr int zoom = 6;
+    const TileMath::TileKey key = keyOver(flat10Region().center(), zoom);
+
+    MockNam nam;
+    nam.body = UnitTestTileGenerator::syntheticTerrariumTileData(key.x, key.y, key.zoom);
+    HeightField field;
+    TerrariumTileFetcher source(nullptr, &nam);
+    source.setHeightField(&field);
+    QSignalSpy regionSpy(&field, &HeightField::regionChanged);
+
+    UnitTestTileGenerator::setForcedMissCount(2);
+    const auto guard = qScopeGuard([] { UnitTestTileGenerator::setForcedMissCount(0); });
+
+    // Same tile requested twice before the fetch completes: one shared fetch,
+    // one insert
+    QVERIFY(source.requestTile(key));
+    QVERIFY(source.requestTile(key));
+    QTRY_COMPARE_WITH_TIMEOUT(regionSpy.count(), 1, TestTimeout::mediumMs());
+    QCOMPARE(nam.requestCount, 1);
+    QCOMPARE(field.tileCount(), 1);
+}
+
+void TerrariumTileFetcherTest::_heldTileNotRefetched()
+{
+    constexpr int zoom = 5;
+    const TileMath::TileKey key = keyOver(flat10Region().center(), zoom);
+
+    MockNam nam;
+    nam.body = UnitTestTileGenerator::syntheticTerrariumTileData(key.x, key.y, key.zoom);
+    HeightField field;
+    TerrariumTileFetcher source(nullptr, &nam);
+    source.setHeightField(&field);
+    QSignalSpy regionSpy(&field, &HeightField::regionChanged);
+
+    UnitTestTileGenerator::setForcedMissCount(3);
+    const auto guard = qScopeGuard([] { UnitTestTileGenerator::setForcedMissCount(0); });
+
+    QVERIFY(source.requestTile(key));
+    QTRY_COMPARE_WITH_TIMEOUT(regionSpy.count(), 1, TestTimeout::mediumMs());
+    QCOMPARE(nam.requestCount, 1);
+
+    // The field already holds this tile: a new request is a satisfied no-op
+    QVERIFY(source.requestTile(key));
+    QVERIFY_NO_SIGNAL_WAIT(regionSpy, TestTimeout::shortMs());
+    QCOMPARE(nam.requestCount, 1);
+}
+
+void TerrariumTileFetcherTest::_tileFetchFailureLeavesFieldIntact()
+{
+    constexpr int zoom = 4;
+    const TileMath::TileKey key = keyOver(flat10Region().center(), zoom);
+
+    MockNam nam;  // empty body: canned network error
+    HeightField field;
+    TerrariumTileFetcher source(nullptr, &nam);
+    source.setHeightField(&field);
+    QSignalSpy regionSpy(&field, &HeightField::regionChanged);
+
+    UnitTestTileGenerator::setForcedMissCount(2);
+    const auto guard = qScopeGuard([] { UnitTestTileGenerator::setForcedMissCount(0); });
+
+    QVERIFY(source.requestTile(key));
+    QTRY_COMPARE_WITH_TIMEOUT(nam.requestCount, 1, TestTimeout::mediumMs());
+    QVERIFY_NO_SIGNAL_WAIT(regionSpy, TestTimeout::shortMs());
+    QCOMPARE(field.tileCount(), 0);
+
+    // Failure clears the in-flight key: a retry fetches again and succeeds
+    nam.body = UnitTestTileGenerator::syntheticTerrariumTileData(key.x, key.y, key.zoom);
+    QVERIFY(source.requestTile(key));
+    QTRY_COMPARE_WITH_TIMEOUT(regionSpy.count(), 1, TestTimeout::mediumMs());
+    QCOMPARE(nam.requestCount, 2);
+    QCOMPARE(field.tileCount(), 1);
+}
+
+void TerrariumTileFetcherTest::_fieldRequestKeepsFetchAliveAfterCancel()
+{
+    constexpr int zoom = 2;
+    const TileMath::TileKey key = keyOver(flat10Region().center(), zoom);
+
+    MockNam nam;
+    nam.body = UnitTestTileGenerator::syntheticTerrariumTileData(key.x, key.y, key.zoom);
+    nam.holdReplies = true;
+    HeightField field;
+    TerrariumTileFetcher source(nullptr, &nam);
+    source.setHeightField(&field);
+    QSignalSpy regionSpy(&field, &HeightField::regionChanged);
+    QSignalSpy readySpy(&source, &HeightSource::patchHeightsReady);
+
+    UnitTestTileGenerator::setForcedMissCount(1);
+    const auto guard = qScopeGuard([] { UnitTestTileGenerator::setForcedMissCount(0); });
+
+    const int requestId = source.requestPatchHeights(key, kGridSize);
+    QTRY_COMPARE_WITH_TIMEOUT(nam.requestCount, 1, TestTimeout::mediumMs());
+
+    // The field piggybacks on the patch fetch already in flight
+    QVERIFY(source.requestTile(key));
+    QCOMPARE(nam.requestCount, 1);
+
+    // Cancelling the last patch waiter must not abort a fetch the field wants
+    source.cancelRequest(requestId);
+    nam.replies.at(0)->finishNormally();
+
+    QTRY_COMPARE_WITH_TIMEOUT(regionSpy.count(), 1, TestTimeout::mediumMs());
+    QCOMPARE(field.tileCount(), 1);
+    QVERIFY(readySpy.isEmpty());  // the cancelled patch request stays silent
+}
+
+void TerrariumTileFetcherTest::_tileRequestGuards()
+{
+    MockNam nam;
+    TerrariumTileFetcher source(nullptr, &nam);
+
+    // No field attached: rejected before any fetch machinery runs
+    QVERIFY(!source.requestTile(keyOver(flat10Region().center(), 3)));
+
+    HeightField field;
+    source.setHeightField(&field);
+    QVERIFY(!source.requestTile(TileMath::TileKey{0, 0, -1}));
+
+    QCOMPARE(nam.requestCount, 0);
+    QCOMPARE(field.tileCount(), 0);
+}
+
+UT_REGISTER_TEST(TerrariumTileFetcherTest, TestLabel::Integration, TestLabel::Terrain)
