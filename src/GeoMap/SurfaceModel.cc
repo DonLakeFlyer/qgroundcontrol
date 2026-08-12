@@ -5,9 +5,10 @@
 #include <QtCore/QTimer>
 #include <QtCore/QVarLengthArray>
 #include <QtCore/QtMath>
+#include <queue>
+
 #include <algorithm>
 #include <cmath>
-#include <queue>
 #include <vector>
 
 #include "GeoMapCamera.h"

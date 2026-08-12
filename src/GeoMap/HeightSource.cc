@@ -1,6 +1,7 @@
 #include "HeightSource.h"
 
 #include <QtCore/QTimer>
+
 #include <cmath>
 
 HeightSource::HeightSource(QObject* parent) : QObject(parent) {}

@@ -1,6 +1,7 @@
 #include "TileMath.h"
 
 #include <QtCore/QtMath>
+
 #include <algorithm>
 #include <cmath>
 

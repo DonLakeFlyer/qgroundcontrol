@@ -1,6 +1,7 @@
 #include "PatchGeometry.h"
 
 #include <QtGui/QVector3D>
+
 #include <algorithm>
 #include <cmath>
 

@@ -10,6 +10,7 @@
 #include "HeightField.h"
 
 #include <QtCore/QtMinMax>
+
 #include <cmath>
 #include <utility>
 

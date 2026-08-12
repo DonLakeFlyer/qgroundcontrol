@@ -4,6 +4,7 @@
 #include <QtCore/QPair>
 #include <QtCore/QSet>
 #include <QtTest/QSignalSpy>
+
 #include <algorithm>
 
 #include "GeoMapCamera.h"

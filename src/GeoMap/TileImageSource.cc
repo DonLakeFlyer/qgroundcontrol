@@ -12,6 +12,7 @@
 #include <QtCore/QFile>
 #include <QtNetwork/QNetworkAccessManager>
 #include <QtNetwork/QNetworkReply>
+
 #include <memory>
 
 #include "MapProvider.h"

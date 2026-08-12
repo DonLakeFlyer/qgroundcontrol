@@ -13,6 +13,7 @@
 #include <QtCore/QList>
 #include <QtCore/QObject>
 #include <QtCore/QRectF>
+
 #include <optional>
 
 #include "TileMath.h"
