@@ -10,7 +10,9 @@
 #pragma once
 
 #include <QtCore/QList>
+#include <QtCore/QObject>
 #include <QtCore/QPointF>
+#include <QtCore/QRectF>
 
 #include "ElevationTilePyramid.h"
 #include "TileMath.h"
@@ -26,13 +28,18 @@
 /// convention, clamped at tile edges), matching the terrarium tile layout.
 ///
 /// Not thread-safe: confine to one thread or synchronize externally.
-class HeightField
+class HeightField : public QObject
 {
+    Q_OBJECT
+
 public:
+    explicit HeightField(QObject* parent = nullptr);
+
     /// Sanity cap on patch density: rejects absurd sizes before allocation
     static constexpr int kMaxGridSize = 4096;
 
-    /// Stores a decoded tile in the backing pyramid; invalid keys/grids rejected
+    /// Stores a decoded tile in the backing pyramid; invalid keys/grids
+    /// rejected. Emits regionChanged for the tile's world extent on success.
     bool insertTile(const TileMath::TileKey& key, ElevationTilePyramid::Grid grid);
 
     /// Best-estimate height (meters) at a mercator world position; 0.0 where
@@ -44,6 +51,14 @@ public:
     QList<float> samplePatch(const TileMath::TileKey& key, int gridSize) const;
 
     int tileCount() const { return _pyramid.tileCount(); }
+
+signals:
+    /// Best-estimate heights changed within this rect (TileMath world meters,
+    /// y north; min-corner + positive spans — don't use top()/bottom()).
+    /// The rect is closed: patch edge vertices exactly on its boundary sample
+    /// the new data, but QRectF::intersects() is false for edge-only contact,
+    /// so inflate the patch rect (e.g. marginsAdded) before testing
+    void regionChanged(const QRectF& worldRect);
 
 private:
     ElevationTilePyramid _pyramid;

@@ -1,5 +1,7 @@
 #include "HeightFieldTest.h"
 
+#include <QtTest/QSignalSpy>
+
 #include "HeightField.h"
 
 using namespace TileMath;
@@ -155,6 +157,43 @@ void HeightFieldTest::_crossZoomVertexIdentity()
             QCOMPARE(child[(row * 3) + col], parent[(row * 5) + col]);
         }
     }
+}
+
+void HeightFieldTest::_regionChangedOnInsert()
+{
+    HeightField field;
+    QSignalSpy spy(&field, &HeightField::regionChanged);
+    QVERIFY(spy.isValid());
+
+    // Fine tile: rect is exactly the tile's world extent
+    const TileKey fineKey{5, 6, 3};
+    QVERIFY(field.insertTile(fineKey, uniformGrid(10.0f)));
+    QCOMPARE(spy.count(), 1);
+    const QPointF fineCorner = tileMinCorner(fineKey);
+    const double fineSpan = tileSpanAtZoom(fineKey.zoom);
+    QCOMPARE(spy[0][0].toRectF(), QRectF(fineCorner.x(), fineCorner.y(), fineSpan, fineSpan));
+
+    // Ancestor tile: notifies its full (here: whole-world) area
+    QVERIFY(field.insertTile(TileKey{0, 0, 0}, uniformGrid(20.0f)));
+    QCOMPARE(spy.count(), 2);
+    const double world = worldSize();
+    QCOMPARE(spy[1][0].toRectF(), QRectF(-world / 2.0, -world / 2.0, world, world));
+
+    // Replacing a tile changes heights under the same area: must re-notify
+    QVERIFY(field.insertTile(fineKey, uniformGrid(30.0f)));
+    QCOMPARE(spy.count(), 3);
+    QCOMPARE(spy[2][0].toRectF(), spy[0][0].toRectF());
+}
+
+void HeightFieldTest::_noRegionChangedOnRejectedInsert()
+{
+    HeightField field;
+    QSignalSpy spy(&field, &HeightField::regionChanged);
+    QVERIFY(spy.isValid());
+
+    QVERIFY(!field.insertTile(TileKey{0, 0, -1}, uniformGrid(10.0f)));
+    QVERIFY(!field.insertTile(TileKey{0, 0, 0}, ElevationTilePyramid::Grid{}));
+    QCOMPARE(spy.count(), 0);
 }
 
 UT_REGISTER_TEST_LIGHTWEIGHT(HeightFieldTest, TestLabel::Unit)

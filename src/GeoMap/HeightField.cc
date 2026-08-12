@@ -38,9 +38,18 @@ double heightAtUV(const ElevationTilePyramid::Grid& grid, double u, double v)
 
 }  // namespace
 
+HeightField::HeightField(QObject* parent) : QObject(parent) {}
+
 bool HeightField::insertTile(const TileMath::TileKey& key, ElevationTilePyramid::Grid grid)
 {
-    return _pyramid.insertTile(key, std::move(grid));
+    if (!_pyramid.insertTile(key, std::move(grid))) {
+        return false;
+    }
+
+    const QPointF corner = TileMath::tileMinCorner(key);
+    const double span = TileMath::tileSpanAtZoom(key.zoom);
+    emit regionChanged(QRectF(corner.x(), corner.y(), span, span));
+    return true;
 }
 
 double HeightField::heightAt(const QPointF& world) const

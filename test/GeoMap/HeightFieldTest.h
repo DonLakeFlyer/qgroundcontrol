@@ -15,4 +15,6 @@ private slots:
     void _finestTileWins();
     void _sharedEdgeIdentity();
     void _crossZoomVertexIdentity();
+    void _regionChangedOnInsert();
+    void _noRegionChangedOnRejectedInsert();
 };
