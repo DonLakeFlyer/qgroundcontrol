@@ -3,6 +3,7 @@
 #include <QtCore/QRegularExpression>
 #include <QtTest/QSignalSpy>
 
+#include "Benchmarking.h"
 #include "HeightField.h"
 
 using namespace TileMath;
@@ -199,6 +200,65 @@ void HeightFieldTest::_noRegionChangedOnRejectedInsert()
     QVERIFY(!field.insertTile(TileKey{0, 0, -1}, uniformGrid(10.0f)));
     QVERIFY(!field.insertTile(TileKey{0, 0, 0}, ElevationTilePyramid::Grid{}));
     QCOMPARE(spy.count(), 0);
+}
+
+void HeightFieldTest::_samplePatchLookupCountGate()
+{
+    HeightField field;
+    QVERIFY(field.insertTile(TileKey{5, 6, 3}, uniformGrid(50.0f)));
+
+    // Memoization gate: interior vertices reuse the last resolved view, so
+    // pyramid lookups stay far below one per vertex. Only the east/south
+    // boundary vertices (which fall outside the sampled tile) re-resolve:
+    // 2*(gridSize+1) - 1 = 33 of the 289 vertices, plus the initial miss.
+    const int gridSize = 16;
+    const QList<float> heights = field.samplePatch(TileKey{5, 6, 3}, gridSize);
+    QCOMPARE(heights.size(), (gridSize + 1) * (gridSize + 1));
+    QCOMPARE_LE(field.lookupCountForTest(), 40);
+}
+
+void HeightFieldTest::_samplePatchLookupCountGateMixedZooms()
+{
+    HeightField field;
+    QVERIFY(field.insertTile(TileKey{5, 6, 3}, uniformGrid(50.0f)));
+
+    // A deeper tile far from the sampled patch must not disable memoization:
+    // only a descendant of the resolved tile could override its answer
+    QVERIFY(field.insertTile(TileKey{0, 0, 5}, uniformGrid(80.0f)));
+
+    const qint64 before = field.lookupCountForTest();
+    const int gridSize = 16;
+    const QList<float> heights = field.samplePatch(TileKey{5, 6, 3}, gridSize);
+    QCOMPARE(heights.size(), (gridSize + 1) * (gridSize + 1));
+    QCOMPARE_LE(field.lookupCountForTest() - before, 40);
+}
+
+void HeightFieldTest::_memoInvalidatedOnInsert()
+{
+    HeightField field;
+    QVERIFY(field.insertTile(TileKey{0, 0, 0}, uniformGrid(100.0f)));
+
+    // First query primes the memoized view on the coarse tile
+    const QPointF p = vertexWorld(TileKey{5, 6, 3}, 2, 1, 1);
+    QCOMPARE(field.heightAt(p), 100.0);
+
+    // A finer tile over the same position must win immediately: the insert
+    // invalidates the memoized coarse view
+    QVERIFY(field.insertTile(TileKey{5, 6, 3}, uniformGrid(200.0f)));
+    QCOMPARE(field.heightAt(p), 200.0);
+}
+
+void HeightFieldTest::_samplePatchBenchmark()
+{
+    HeightField field;
+    QVERIFY(field.insertTile(TileKey{5, 6, 3}, uniformGrid(50.0f)));
+
+    const TileKey key{5, 6, 3};
+    QBENCHMARK
+    {
+        const QList<float> heights = field.samplePatch(key, 64);
+        QT_BENCHMARK_KEEP(heights);
+    }
 }
 
 UT_REGISTER_TEST_LIGHTWEIGHT(HeightFieldTest, TestLabel::Unit)

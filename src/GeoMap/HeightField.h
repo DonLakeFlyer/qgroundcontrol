@@ -27,7 +27,9 @@
 /// Heights are sampled bilinearly between grid sample centers (pixel-center
 /// convention, clamped at tile edges), matching the terrarium tile layout.
 ///
-/// Not thread-safe: confine to one thread or synchronize externally.
+/// Not thread-safe: confine to one thread or synchronize externally. This
+/// includes the const sampling methods — they mutate an internal memo cache,
+/// so even concurrent reads race.
 class HeightField : public QObject
 {
     Q_OBJECT
@@ -55,6 +57,11 @@ public:
     /// True when the backing pyramid holds this exact tile
     bool hasTile(const TileMath::TileKey& key) const { return _pyramid.hasTile(key); }
 
+    /// Perf instrumentation: pyramid resolutions performed so far (memoized
+    /// sampling keeps this far below one per sampled vertex). Test hook, not
+    /// API — semantics track the resolution strategy.
+    qint64 lookupCountForTest() const { return _pyramid.lookupCountForTest(); }
+
 signals:
     /// Best-estimate heights changed within this rect (TileMath world meters,
     /// y north; min-corner + positive spans — don't use top()/bottom()).
@@ -65,4 +72,16 @@ signals:
 
 private:
     ElevationTilePyramid _pyramid;
+
+    // Memoized last resolved view: adjacent sample positions almost always
+    // resolve to the same stored tile, so heightAt reuses it when the
+    // position is inside the tile. Only populated when the tile has no
+    // stored descendant (nothing finer could override it), and invalidated
+    // on every insert (the view's grid pointer is only valid until then).
+    mutable ElevationTilePyramid::View _memoView;
+    mutable double _memoMinX = 0.0;
+    mutable double _memoMaxX = 0.0;
+    mutable double _memoMinY = 0.0;
+    mutable double _memoMaxY = 0.0;
+    mutable double _memoSpan = 0.0;
 };

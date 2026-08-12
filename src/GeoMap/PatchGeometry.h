@@ -12,6 +12,10 @@
 #include <QtCore/QList>
 #include <QtQuick3D/QQuick3DGeometry>
 
+#include "TileMath.h"
+
+class HeightField;
+
 /// Grid mesh for one surface patch of the GeoMap engine.
 ///
 /// Local space: origin at the patch center, x east, y north, z up (meters).
@@ -55,6 +59,16 @@ public:
 
     void setHeights(const QList<float>& heights);
 
+    /// Field to sample vertex heights from; not owned, may be null
+    HeightField* heightField() const { return _heightField; }
+
+    void setHeightField(HeightField* heightField) { _heightField = heightField; }
+
+    /// Samples the height field at this patch's vertex world positions (tile
+    /// \a key at the current gridSize) and rebuilds the mesh. Returns false
+    /// when no field is set or the key is invalid.
+    bool sampleFromField(const TileMath::TileKey& key);
+
 signals:
     void gridSizeChanged();
     void spanChanged();
@@ -67,4 +81,5 @@ private:
     int _gridSize = 16;
     qreal _span = 1000.0;
     QList<float> _heights;
+    HeightField* _heightField = nullptr;
 };

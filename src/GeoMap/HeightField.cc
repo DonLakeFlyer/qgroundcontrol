@@ -56,6 +56,7 @@ bool HeightField::insertTile(const TileMath::TileKey& key, ElevationTilePyramid:
                                         << gridHeight;
         return false;
     }
+    _memoView = ElevationTilePyramid::View{};  // grid pointers die on insert
     qCDebug(GeoMapHeightFieldVerboseLog) << "inserted tile" << key;
 
     const QPointF corner = TileMath::tileMinCorner(key);
@@ -66,6 +67,18 @@ bool HeightField::insertTile(const TileMath::TileKey& key, ElevationTilePyramid:
 
 double HeightField::heightAt(const QPointF& world) const
 {
+    // Memoized fast path: the last resolved tile answers when the position is
+    // inside it (the memo is only populated when no stored descendant could
+    // override it, and every insert invalidates it). Bounds are half-open
+    // ([minX, maxX) x (minY, maxY]) to match the tile-assignment convention
+    // of TileMath::tileForWorld.
+    if (_memoView.isValid() && (world.x() >= _memoMinX) && (world.x() < _memoMaxX) && (world.y() > _memoMinY) &&
+        (world.y() <= _memoMaxY)) {
+        const double u = (world.x() - _memoMinX) / _memoSpan;
+        const double v = (_memoMaxY - world.y()) / _memoSpan;  // grid origin is the NW corner
+        return heightAtUV(*_memoView.grid, u, v);
+    }
+
     // Query at the deepest zoom; the pyramid resolves the finest stored cover
     const TileMath::TileKey query = TileMath::tileForWorld(world, TileMath::kMaxZoom);
     const ElevationTilePyramid::View view = _pyramid.bestTileFor(query);
@@ -75,6 +88,17 @@ double HeightField::heightAt(const QPointF& world) const
 
     const QPointF corner = TileMath::tileMinCorner(view.key);
     const double span = TileMath::tileSpanAtZoom(view.key.zoom);
+    if (!_pyramid.hasDescendant(view.key)) {
+        // Nothing finer exists anywhere inside this tile, so it answers for
+        // every position within its bounds until the next insert
+        _memoView = view;
+        _memoMinX = corner.x();
+        _memoMaxX = corner.x() + span;
+        _memoMinY = corner.y();
+        _memoMaxY = corner.y() + span;
+        _memoSpan = span;
+    }
+
     const double u = (world.x() - corner.x()) / span;
     const double v = ((corner.y() + span) - world.y()) / span;  // grid origin is the NW corner
     return heightAtUV(*view.grid, u, v);

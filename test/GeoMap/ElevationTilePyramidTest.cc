@@ -150,4 +150,57 @@ void ElevationTilePyramidTest::_insertReplacesTile()
     QCOMPARE(pyramid.bestTileFor(key).grid->heights.first(), 2.0f);
 }
 
+void ElevationTilePyramidTest::_lruEvictionAtCap()
+{
+    ElevationTilePyramid pyramid;
+    for (int i = 0; i < ElevationTilePyramid::kMaxTiles; i++) {
+        QVERIFY(pyramid.insertTile(TileMath::TileKey{i, 0, 8}, makeGrid(float(i))));
+    }
+    QCOMPARE(pyramid.tileCount(), ElevationTilePyramid::kMaxTiles);
+
+    // Touch the oldest tile so it is no longer least-recently-used
+    QVERIFY(pyramid.bestTileFor(TileMath::TileKey{0, 0, 8}).isValid());
+
+    // Inserting past the cap evicts the least-recently-used tile ({1,0,8})
+    QVERIFY(pyramid.insertTile(TileMath::TileKey{200, 0, 8}, makeGrid(1.0f)));
+    QCOMPARE(pyramid.tileCount(), ElevationTilePyramid::kMaxTiles);
+    QVERIFY(pyramid.hasTile(TileMath::TileKey{0, 0, 8}));
+    QVERIFY(!pyramid.hasTile(TileMath::TileKey{1, 0, 8}));
+    QVERIFY(pyramid.hasTile(TileMath::TileKey{200, 0, 8}));
+
+    // Replacing an existing key stays at the cap without evicting others
+    QVERIFY(pyramid.insertTile(TileMath::TileKey{200, 0, 8}, makeGrid(2.0f)));
+    QCOMPARE(pyramid.tileCount(), ElevationTilePyramid::kMaxTiles);
+    QVERIFY(pyramid.hasTile(TileMath::TileKey{2, 0, 8}));
+}
+
+void ElevationTilePyramidTest::_descendantTracking()
+{
+    ElevationTilePyramid pyramid;
+
+    // {20,24,5} sits under {5,6,3} via {10,12,4}: every ancestor sees it
+    QVERIFY(pyramid.insertTile(TileMath::TileKey{20, 24, 5}, makeGrid(1.0f)));
+    QVERIFY(pyramid.hasDescendant(TileMath::TileKey{10, 12, 4}));
+    QVERIFY(pyramid.hasDescendant(TileMath::TileKey{5, 6, 3}));
+    QVERIFY(pyramid.hasDescendant(TileMath::TileKey{0, 0, 0}));
+    QVERIFY(!pyramid.hasDescendant(TileMath::TileKey{6, 6, 3}));    // sibling subtree
+    QVERIFY(!pyramid.hasDescendant(TileMath::TileKey{20, 24, 5}));  // strictly deeper only
+    QVERIFY(!pyramid.hasDescendant(TileMath::TileKey{40, 48, 6}));  // child of stored tile
+
+    // Replacing a stored tile leaves the counts unchanged
+    QVERIFY(pyramid.insertTile(TileMath::TileKey{20, 24, 5}, makeGrid(2.0f)));
+    QVERIFY(pyramid.hasDescendant(TileMath::TileKey{5, 6, 3}));
+
+    // Evicting the whole {0,0,1} subtree clears its descendant marks: fill
+    // the cap under {0,0,1}, then displace it all with the {1,1,1} subtree
+    for (int i = 0; i < ElevationTilePyramid::kMaxTiles; i++) {
+        QVERIFY(pyramid.insertTile(TileMath::TileKey{i, 0, 8}, makeGrid(1.0f)));
+    }
+    for (int i = 0; i < ElevationTilePyramid::kMaxTiles; i++) {
+        QVERIFY(pyramid.insertTile(TileMath::TileKey{128 + i, 128, 8}, makeGrid(1.0f)));
+    }
+    QVERIFY(!pyramid.hasDescendant(TileMath::TileKey{0, 0, 1}));
+    QVERIFY(pyramid.hasDescendant(TileMath::TileKey{1, 1, 1}));
+}
+
 UT_REGISTER_TEST_LIGHTWEIGHT(ElevationTilePyramidTest, TestLabel::Unit)

@@ -17,4 +17,8 @@ private slots:
     void _crossZoomVertexIdentity();
     void _regionChangedOnInsert();
     void _noRegionChangedOnRejectedInsert();
+    void _samplePatchLookupCountGate();
+    void _samplePatchLookupCountGateMixedZooms();
+    void _memoInvalidatedOnInsert();
+    void _samplePatchBenchmark();
 };

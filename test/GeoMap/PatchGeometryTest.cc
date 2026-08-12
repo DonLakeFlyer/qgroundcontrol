@@ -1,7 +1,11 @@
 #include "PatchGeometryTest.h"
 
+#include <QtCore/QRegularExpression>
+#include <QtTest/QSignalSpy>
+
 #include <cmath>
 
+#include "HeightField.h"
 #include "PatchGeometry.h"
 
 namespace {
@@ -35,6 +39,30 @@ QList<float> rampHeights(int gridSize)
         }
     }
     return heights;
+}
+
+ElevationTilePyramid::Grid uniformGrid(float height)
+{
+    ElevationTilePyramid::Grid grid;
+    grid.width = 4;
+    grid.height = 4;
+    grid.heights = QList<float>(16, height);
+    return grid;
+}
+
+/// Linear in both axes so bilinear sampling reproduces the plane and edge
+/// vertices carry distinct values (uniform grids couldn't catch edge bugs)
+ElevationTilePyramid::Grid gradientGrid()
+{
+    ElevationTilePyramid::Grid grid;
+    grid.width = 4;
+    grid.height = 4;
+    for (int row = 0; row < 4; row++) {
+        for (int col = 0; col < 4; col++) {
+            grid.heights.append(float((col * 10) + (row * 40)));
+        }
+    }
+    return grid;
 }
 
 }  // namespace
@@ -168,6 +196,102 @@ void PatchGeometryTest::_gridSizeClamped()
     QCOMPARE(geometry.gridSize(), PatchGeometry::kMinGridSize);
     geometry.setGridSize(100000);
     QCOMPARE(geometry.gridSize(), PatchGeometry::kMaxGridSize);
+}
+
+void PatchGeometryTest::_sampleFromFieldDisplacesVertices()
+{
+    HeightField field;
+    QVERIFY(field.insertTile(TileMath::TileKey{0, 0, 0}, uniformGrid(100.0f)));
+
+    PatchGeometry geometry;
+    geometry.setGridSize(kGrid);
+    geometry.setSpan(kSpan);
+    geometry.setHeightField(&field);
+    QVERIFY(geometry.sampleFromField(TileMath::TileKey{5, 6, 3}));
+
+    const QByteArray data = geometry.vertexData();
+    for (int i = 0; i < gridVertexCount(kGrid); i++) {
+        QCOMPARE(vertexAt(data, i)[2], 100.0f);
+    }
+}
+
+void PatchGeometryTest::_sampleFromFieldWithoutFieldWarns()
+{
+    PatchGeometry geometry;
+    geometry.setGridSize(kGrid);
+
+    expectLogMessage("GeoMap.PatchGeometry", QtWarningMsg, QRegularExpression("^sampleFromField rejected:"));
+    QVERIFY(!geometry.sampleFromField(TileMath::TileKey{5, 6, 3}));
+    verifyExpectedLogMessage();
+
+    // With a field set, an invalid key is rejected by both layers
+    HeightField field;
+    geometry.setHeightField(&field);
+    expectLogMessage("GeoMap.HeightField", QtWarningMsg, QRegularExpression("^samplePatch rejected:"));
+    expectLogMessage("GeoMap.PatchGeometry", QtWarningMsg, QRegularExpression("^sampleFromField rejected:"));
+    QVERIFY(!geometry.sampleFromField(TileMath::TileKey{0, 0, -1}));
+    verifyExpectedLogMessage();
+    verifyExpectedLogMessage();
+}
+
+void PatchGeometryTest::_adjacentPatchesShareEdgeHeights()
+{
+    HeightField field;
+    QVERIFY(field.insertTile(TileMath::TileKey{0, 0, 0}, gradientGrid()));
+
+    PatchGeometry west;
+    west.setGridSize(kGrid);
+    west.setSpan(kSpan);
+    west.setHeightField(&field);
+    QVERIFY(west.sampleFromField(TileMath::TileKey{5, 6, 3}));
+
+    PatchGeometry east;
+    east.setGridSize(kGrid);
+    east.setSpan(kSpan);
+    east.setHeightField(&field);
+    QVERIFY(east.sampleFromField(TileMath::TileKey{6, 6, 3}));
+
+    // Core drape invariant: the shared edge samples identical world positions
+    // in the same field, so the meshed heights must match bit-for-bit
+    const QByteArray westData = west.vertexData();
+    const QByteArray eastData = east.vertexData();
+    for (int row = 0; row <= kGrid; row++) {
+        const float westEdgeZ = vertexAt(westData, (row * (kGrid + 1)) + kGrid)[2];
+        const float eastEdgeZ = vertexAt(eastData, row * (kGrid + 1))[2];
+        QCOMPARE(westEdgeZ, eastEdgeZ);
+    }
+
+    // Sanity: the gradient varies along the edge, so the comparison is real
+    QCOMPARE_NE(vertexAt(westData, kGrid)[2], vertexAt(westData, (kGrid * (kGrid + 1)) + kGrid)[2]);
+}
+
+void PatchGeometryTest::_resampleAfterFieldGainsData()
+{
+    HeightField field;
+    PatchGeometry geometry;
+    geometry.setGridSize(kGrid);
+    geometry.setSpan(kSpan);
+    geometry.setHeightField(&field);
+    QSignalSpy spy(&geometry, &PatchGeometry::heightsChanged);
+    QVERIFY(spy.isValid());
+
+    // Empty field: sampling succeeds with the zero best-estimate everywhere
+    const TileMath::TileKey key{5, 6, 3};
+    QVERIFY(geometry.sampleFromField(key));
+    const QByteArray flatData = geometry.vertexData();
+    for (int i = 0; i < gridVertexCount(kGrid); i++) {
+        QCOMPARE(vertexAt(flatData, i)[2], 0.0f);
+    }
+    const int emptySampleSignals = spy.count();
+
+    // Field gains data: resampling picks it up and notifies
+    QVERIFY(field.insertTile(TileMath::TileKey{0, 0, 0}, uniformGrid(100.0f)));
+    QVERIFY(geometry.sampleFromField(key));
+    const QByteArray sampledData = geometry.vertexData();
+    for (int i = 0; i < gridVertexCount(kGrid); i++) {
+        QCOMPARE(vertexAt(sampledData, i)[2], 100.0f);
+    }
+    QCOMPARE_GT(spy.count(), emptySampleSignals);
 }
 
 UT_REGISTER_TEST(PatchGeometryTest, TestLabel::Unit)

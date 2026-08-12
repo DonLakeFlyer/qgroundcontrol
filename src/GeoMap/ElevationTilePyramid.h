@@ -25,11 +25,17 @@
 /// to sample — never a descendant — so coverage is continuous wherever any
 /// ancestor data exists.
 ///
-/// Not thread-safe: confine to one thread or synchronize externally.
-/// No eviction yet — tiles accumulate for the session (follow-up: LRU cap).
+/// Not thread-safe: confine to one thread or synchronize externally. This
+/// includes the const lookup methods — they mutate recency/instrumentation
+/// state, so even concurrent reads race.
+/// Bounded working set: least-recently-used tiles are evicted past kMaxTiles.
 class ElevationTilePyramid
 {
 public:
+    /// Working-set cap: least-recently-used tiles are evicted at insert time
+    /// (256x256 float tiles ~256KB each, so the cap bounds memory at ~32MB)
+    static constexpr int kMaxTiles = 128;
+
     /// Decoded elevation samples for one tile, row-major from the NW corner
     struct Grid
     {
@@ -63,6 +69,20 @@ public:
 
     int tileCount() const { return static_cast<int>(_tiles.count()); }
 
+    /// True when any stored tile lies strictly deeper within \a key's extent
+    /// (i.e. a lookup inside \a key could resolve finer than \a key itself)
+    bool hasDescendant(const TileMath::TileKey& key) const { return _descendantCounts.value(key, 0) > 0; }
+
+    /// Perf instrumentation: number of bestTileFor resolutions performed
+    /// (test hook, not API — semantics track the resolution strategy)
+    qint64 lookupCountForTest() const { return _lookupCount; }
+
 private:
+    void _evictLeastRecentlyUsed();
+
     QHash<TileMath::TileKey, Grid> _tiles;
+    QHash<TileMath::TileKey, int> _descendantCounts;  ///< stored tiles strictly below each key
+    mutable QHash<TileMath::TileKey, qint64> _lastUsed;
+    mutable qint64 _useTick = 0;
+    mutable qint64 _lookupCount = 0;
 };

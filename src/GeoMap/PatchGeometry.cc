@@ -5,6 +5,11 @@
 #include <algorithm>
 #include <cmath>
 
+#include "HeightField.h"
+#include "QGCLoggingCategory.h"
+
+QGC_LOGGING_CATEGORY(GeoMapPatchGeometryLog, "GeoMap.PatchGeometry")
+
 PatchGeometry::PatchGeometry(QQuick3DObject* parent) : QQuick3DGeometry(parent)
 {
     _rebuild();
@@ -39,6 +44,22 @@ void PatchGeometry::setHeights(const QList<float>& heights)
     _heights = heights;
     emit heightsChanged();
     _rebuild();
+}
+
+bool PatchGeometry::sampleFromField(const TileMath::TileKey& key)
+{
+    if (!_heightField) {
+        qCWarning(GeoMapPatchGeometryLog) << "sampleFromField rejected: no height field set, key" << key;
+        return false;
+    }
+    const QList<float> sampled = _heightField->samplePatch(key, _gridSize);
+    if (sampled.isEmpty()) {
+        qCWarning(GeoMapPatchGeometryLog)
+            << "sampleFromField rejected: field returned no samples, key" << key << "gridSize" << _gridSize;
+        return false;
+    }
+    setHeights(sampled);
+    return true;
 }
 
 float PatchGeometry::_heightAt(int row, int col) const

@@ -16,4 +16,6 @@ private slots:
     void _subWindowMath();
     void _subWindowDeepZoom();
     void _insertReplacesTile();
+    void _lruEvictionAtCap();
+    void _descendantTracking();
 };

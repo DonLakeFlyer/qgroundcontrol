@@ -15,4 +15,8 @@ private slots:
     void _flatNormalsPointUp();
     void _boundsIncludeSkirt();
     void _gridSizeClamped();
+    void _sampleFromFieldDisplacesVertices();
+    void _sampleFromFieldWithoutFieldWarns();
+    void _adjacentPatchesShareEdgeHeights();
+    void _resampleAfterFieldGainsData();
 };
