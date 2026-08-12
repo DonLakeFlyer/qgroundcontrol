@@ -14,6 +14,11 @@
 #include <cmath>
 #include <utility>
 
+#include "QGCLoggingCategory.h"
+
+QGC_LOGGING_CATEGORY(GeoMapHeightFieldLog, "GeoMap.HeightField")
+QGC_LOGGING_CATEGORY(GeoMapHeightFieldVerboseLog, "GeoMap.HeightField.Verbose")
+
 namespace {
 
 /// Bilinear height at a unit-UV position within a grid (origin NW corner),
@@ -43,9 +48,15 @@ HeightField::HeightField(QObject* parent) : QObject(parent) {}
 
 bool HeightField::insertTile(const TileMath::TileKey& key, ElevationTilePyramid::Grid grid)
 {
+    // Capture before the move: on rejection the grid has been consumed
+    const int gridWidth = grid.width;
+    const int gridHeight = grid.height;
     if (!_pyramid.insertTile(key, std::move(grid))) {
+        qCWarning(GeoMapHeightFieldLog) << "insertTile rejected: key" << key << "grid" << gridWidth << "x"
+                                        << gridHeight;
         return false;
     }
+    qCDebug(GeoMapHeightFieldVerboseLog) << "inserted tile" << key;
 
     const QPointF corner = TileMath::tileMinCorner(key);
     const double span = TileMath::tileSpanAtZoom(key.zoom);
@@ -72,6 +83,7 @@ double HeightField::heightAt(const QPointF& world) const
 QList<float> HeightField::samplePatch(const TileMath::TileKey& key, int gridSize) const
 {
     if ((gridSize < 1) || (gridSize > kMaxGridSize) || !TileMath::isValidKey(key)) {
+        qCWarning(GeoMapHeightFieldLog) << "samplePatch rejected: key" << key << "gridSize" << gridSize;
         return QList<float>();
     }
 

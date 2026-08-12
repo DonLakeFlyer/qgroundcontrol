@@ -1,11 +1,19 @@
 #include "TileMath.h"
 
+#include <QtCore/QDebug>
 #include <QtCore/QtMath>
 
 #include <algorithm>
 #include <cmath>
 
 namespace TileMath {
+
+QDebug operator<<(QDebug debug, const TileKey& key)
+{
+    const QDebugStateSaver saver(debug);
+    debug.nospace() << key.zoom << '/' << key.x << '/' << key.y;
+    return debug;
+}
 
 double worldSize()
 {

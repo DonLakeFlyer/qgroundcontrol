@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include <QtCore/QDebug>
 #include <QtCore/QHashFunctions>
 #include <QtCore/QMetaType>
 #include <QtCore/QPointF>
@@ -43,6 +44,9 @@ inline size_t qHash(const TileKey& key, size_t seed = 0)
 {
     return ::qHashMulti(seed, key.x, key.y, key.zoom);
 }
+
+/// Streams as slippy "zoom/x/y" notation for logging
+QDebug operator<<(QDebug debug, const TileKey& key);
 
 }  // namespace TileMath
 

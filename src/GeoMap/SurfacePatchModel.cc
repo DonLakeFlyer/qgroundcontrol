@@ -16,10 +16,14 @@
 #include "GeoMapCamera.h"
 #include "GeoScene.h"
 #include "HeightSource.h"
+#include "QGCLoggingCategory.h"
 #include "SurfaceAnalysis.h"
 #include "SurfaceModel.h"
 #include "TerrariumTileFetcher.h"
 #include "TileImageSource.h"
+
+QGC_LOGGING_CATEGORY(GeoMapSurfacePatchModelLog, "GeoMap.SurfacePatchModel")
+QGC_LOGGING_CATEGORY(GeoMapSurfacePatchModelVerboseLog, "GeoMap.SurfacePatchModel.Verbose")
 
 SurfacePatchModel::SurfacePatchModel(QObject* parent) : QAbstractListModel(parent) {}
 
@@ -82,6 +86,7 @@ void SurfacePatchModel::setTerrain(bool terrain)
     if (terrain == _terrain) {
         return;
     }
+    qCDebug(GeoMapSurfacePatchModelLog) << "terrain" << _terrain << "->" << terrain;
     _terrain = terrain;
     emit terrainChanged();
     _rebuildSurfaceModel();
@@ -92,6 +97,7 @@ void SurfacePatchModel::setDebugHills(bool debugHills)
     if (debugHills == _debugHills) {
         return;
     }
+    qCDebug(GeoMapSurfacePatchModelLog) << "debugHills" << _debugHills << "->" << debugHills;
     _debugHills = debugHills;
     emit debugHillsChanged();
     _rebuildSurfaceModel();
@@ -102,6 +108,7 @@ void SurfacePatchModel::setMapType(const QString& mapType)
     if (mapType == _mapType) {
         return;
     }
+    qCDebug(GeoMapSurfacePatchModelLog) << "mapType" << _mapType << "->" << mapType;
     _mapType = mapType;
     emit mapTypeChanged();
 
@@ -164,6 +171,7 @@ void SurfacePatchModel::_tileImageReady(int requestId, const QImage& image)
     }
     _tileImages.insert(key, image);
     _fallbackCache.remove(key);  // own image supersedes any cached miss
+    qCDebug(GeoMapSurfacePatchModelVerboseLog) << "tile image ready for" << key;
     _invalidateFallbacks(key);
     _notifyTileImageChanged(key);
 }
@@ -220,6 +228,7 @@ void SurfacePatchModel::_tileImageFailed(int requestId)
     if (it == _imageRequestKey.constEnd()) {
         return;
     }
+    qCDebug(GeoMapSurfacePatchModelLog) << "tile image failed for" << it.value() << "(keeping fallback)";
     _imageRequestByKey.remove(it.value());
     _imageRequestKey.erase(it);
 }
@@ -243,6 +252,8 @@ void SurfacePatchModel::_rebuildSurfaceModel()
         } else {
             _heightSource = new FlatHeightSource(this);
         }
+        qCDebug(GeoMapSurfacePatchModelLog) << "rebuilding surface model, height source:"
+                                            << (_debugHills ? "debug hills" : (_terrain ? "terrain" : "flat"));
         _surfaceModel = new SurfaceModel(camera, _heightSource, this);
         connect(_surfaceModel, &SurfaceModel::patchAdded, this, &SurfacePatchModel::_patchAdded);
         connect(_surfaceModel, &SurfaceModel::patchReady, this, &SurfacePatchModel::_patchReady);

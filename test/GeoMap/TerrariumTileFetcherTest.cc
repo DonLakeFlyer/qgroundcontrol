@@ -232,7 +232,10 @@ void TerrariumTileFetcherTest::_invalidGridSizeFails()
     QSignalSpy readySpy(&source, &HeightSource::patchHeightsReady);
     QSignalSpy failedSpy(&source, &HeightSource::patchHeightsFailed);
 
+    expectLogMessage("GeoMap.TerrariumTileFetcher", QtWarningMsg,
+                     QRegularExpression(QStringLiteral("^requestPatchHeights rejected:")));
     const int requestId = source.requestPatchHeights(keyOver(flat10Region().center(), kFineZoom), 0);
+    verifyExpectedLogMessage();
     QCOMPARE_GT(requestId, 0);
     QVERIFY(failedSpy.isEmpty());  // failure is async too
 
@@ -271,7 +274,10 @@ void TerrariumTileFetcherTest::_invalidKeyFails()
     QSignalSpy readySpy(&source, &HeightSource::patchHeightsReady);
     QSignalSpy failedSpy(&source, &HeightSource::patchHeightsFailed);
 
+    expectLogMessage("GeoMap.TerrariumTileFetcher", QtWarningMsg,
+                     QRegularExpression(QStringLiteral("^requestPatchHeights rejected:")));
     const int requestId = source.requestPatchHeights(TileMath::TileKey{0, 0, -1}, kGridSize);
+    verifyExpectedLogMessage();
     QCOMPARE_GT(requestId, 0);
 
     QTRY_COMPARE_WITH_TIMEOUT(failedSpy.count(), 1, TestTimeout::mediumMs());
@@ -664,11 +670,17 @@ void TerrariumTileFetcherTest::_tileRequestGuards()
     TerrariumTileFetcher source(nullptr, &nam);
 
     // No field attached: rejected before any fetch machinery runs
+    expectLogMessage("GeoMap.TerrariumTileFetcher", QtWarningMsg,
+                     QRegularExpression(QStringLiteral("^requestTile rejected:")));
     QVERIFY(!source.requestTile(keyOver(flat10Region().center(), 3)));
+    verifyExpectedLogMessage();
 
     HeightField field;
     source.setHeightField(&field);
+    expectLogMessage("GeoMap.TerrariumTileFetcher", QtWarningMsg,
+                     QRegularExpression(QStringLiteral("^requestTile rejected:")));
     QVERIFY(!source.requestTile(TileMath::TileKey{0, 0, -1}));
+    verifyExpectedLogMessage();
 
     QCOMPARE(nam.requestCount, 0);
     QCOMPARE(field.tileCount(), 0);

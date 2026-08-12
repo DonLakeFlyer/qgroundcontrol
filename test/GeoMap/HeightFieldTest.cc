@@ -1,5 +1,6 @@
 #include "HeightFieldTest.h"
 
+#include <QtCore/QRegularExpression>
 #include <QtTest/QSignalSpy>
 
 #include "HeightField.h"
@@ -60,6 +61,8 @@ void HeightFieldTest::_zeroWhenEmpty()
 
 void HeightFieldTest::_invalidRequests()
 {
+    ignoreLogMessage("GeoMap.HeightField", QtWarningMsg, QRegularExpression("^(insertTile|samplePatch) rejected:"));
+
     HeightField field;
     QVERIFY(!field.insertTile(TileKey{0, 0, -1}, gradientGrid()));
     QVERIFY(!field.insertTile(TileKey{0, 0, 0}, ElevationTilePyramid::Grid{}));
@@ -187,6 +190,8 @@ void HeightFieldTest::_regionChangedOnInsert()
 
 void HeightFieldTest::_noRegionChangedOnRejectedInsert()
 {
+    ignoreLogMessage("GeoMap.HeightField", QtWarningMsg, QRegularExpression("^insertTile rejected:"));
+
     HeightField field;
     QSignalSpy spy(&field, &HeightField::regionChanged);
     QVERIFY(spy.isValid());

@@ -58,7 +58,7 @@ signals:
 private:
     void _fetchFromNetwork(int requestId, const TileMath::TileKey& key);
     void _failAsync(int requestId);
-    void _deliver(int requestId, const QByteArray& data);
+    void _deliver(int requestId, const TileMath::TileKey& key, const QByteArray& data);
     void _finishSucceeded(int requestId, const QImage& image);
     void _finishFailed(int requestId);
 

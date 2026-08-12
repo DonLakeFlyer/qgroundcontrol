@@ -92,10 +92,12 @@ void TileImageSourceTest::_multipleRequestsIndependent()
 
 void TileImageSourceTest::_unknownProviderFails()
 {
-    // The provider lookup deliberately warns once at construction
+    // Both the provider lookup and the source itself deliberately warn once at construction
     expectLogMessage("QtLocationPlugin.QGCMapUrlEngine", QtWarningMsg,
                      QRegularExpression(QStringLiteral("type not found: \"No Such Provider\"")));
+    expectLogMessage("GeoMap.TileImageSource", QtWarningMsg, QRegularExpression(QStringLiteral("unknown map type")));
     TileImageSource source(QStringLiteral("No Such Provider"));
+    verifyExpectedLogMessage();
     verifyExpectedLogMessage();
 
     QSignalSpy readySpy(&source, &TileImageSource::tileImageReady);

@@ -13,6 +13,10 @@
 
 #include "GeoMapCamera.h"
 #include "HeightSource.h"
+#include "QGCLoggingCategory.h"
+
+QGC_LOGGING_CATEGORY(GeoMapSurfaceModelLog, "GeoMap.SurfaceModel")
+QGC_LOGGING_CATEGORY(GeoMapSurfaceModelVerboseLog, "GeoMap.SurfaceModel.Verbose")
 
 namespace {
 
@@ -156,6 +160,10 @@ void SurfaceModel::update()
     }
 
     const qint64 elapsedUs = updateTimer.nsecsElapsed() / 1000;
+    qCDebug(GeoMapSurfaceModelVerboseLog)
+        << "update pass: desired" << desired.count() << "resident" << _patches.count() << "adds" << adds << "removals"
+        << _removalsThisPass << "deferred adds" << _addsDeferred << "deferred removals" << _removalsDeferred
+        << "elapsedUs" << elapsedUs;
     _updateStats.updates++;
     _updateStats.totalUs += elapsedUs;
     _updateStats.maxUs = std::max(_updateStats.maxUs, elapsedUs);
@@ -387,6 +395,7 @@ void SurfaceModel::_heightsReady(int requestId, const QList<float>& heights)
     }
     patchIt.value().maxHeight = patchMax;
     patchIt.value().ready = true;
+    qCDebug(GeoMapSurfaceModelVerboseLog) << "patch" << key << "ready, maxHeight" << patchMax;
     emit patchReady(key);
     // Fresh removal budget: this is its own event-loop activation. Removals
     // here also unblock ceiling-deferred adds, so schedule a follow-up.
@@ -464,6 +473,8 @@ void SurfaceModel::_heightsFailed(int requestId)
         patchIt.value().retriesLeft--;
         patchIt.value().requestId = 0;
         const TileMath::TileKey key = patchIt.key();
+        qCDebug(GeoMapSurfaceModelLog) << "heights failed for patch" << key << "- retrying in" << _heightRetryDelayMs
+                                       << "ms," << patchIt.value().retriesLeft << "retries left";
         _requestKeys.erase(it);
         QTimer::singleShot(_heightRetryDelayMs, this, [this, key] { _retryHeights(key); });
         return;
@@ -472,6 +483,8 @@ void SurfaceModel::_heightsFailed(int requestId)
     // fresh. Degraded patches keep any retiring cover (see _overlapsPendingPatch),
     // so a real-height predecessor is not replaced by the flat fallback.
     if (patchIt != _patches.end()) {
+        qCDebug(GeoMapSurfaceModelLog) << "heights failed for patch" << patchIt.key()
+                                       << "- retries exhausted: degrading to flat ground";
         patchIt.value().degraded = true;
     }
     _heightsReady(requestId, QList<float>());

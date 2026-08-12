@@ -5,7 +5,10 @@
 #include <algorithm>
 #include <cmath>
 
+#include "QGCLoggingCategory.h"
 #include "TileMath.h"
+
+QGC_LOGGING_CATEGORY(GeoMapCameraLog, "GeoMap.GeoMapCamera")
 
 namespace {
 
@@ -154,6 +157,7 @@ void GeoMapCamera::setMode(Mode mode)
     if (mode == _mode) {
         return;
     }
+    qCDebug(GeoMapCameraLog) << "mode" << _mode << "->" << mode;
     _mode = mode;
     emit modeChanged();
 }

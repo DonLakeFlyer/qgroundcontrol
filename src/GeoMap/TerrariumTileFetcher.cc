@@ -27,6 +27,7 @@
 #include "QGeoTileFetcherQGC.h"
 
 QGC_LOGGING_CATEGORY(GeoMapTerrariumTileFetcherLog, "GeoMap.TerrariumTileFetcher")
+QGC_LOGGING_CATEGORY(GeoMapTerrariumTileFetcherVerboseLog, "GeoMap.TerrariumTileFetcher.Verbose")
 
 namespace {
 
@@ -130,10 +131,15 @@ int TerrariumTileFetcher::requestPatchHeights(const TileMath::TileKey& key, int 
 {
     const int requestId = _nextRequestId();
 
-    if (gridSize > kMaxGridSize) {
-        qCWarning(GeoMapTerrariumTileFetcherLog) << "gridSize" << gridSize << "exceeds maximum" << kMaxGridSize;
+    if ((gridSize <= 0) || (gridSize > kMaxGridSize) || !TileMath::isValidKey(key)) {
+        qCWarning(GeoMapTerrariumTileFetcherLog)
+            << "requestPatchHeights rejected: key" << key << "gridSize" << gridSize;
+        _pending.insert(requestId, PendingRequest{});
+        _failAsync(requestId);
+        return requestId;
     }
-    if ((gridSize <= 0) || (gridSize > kMaxGridSize) || (_mapId < 0) || !TileMath::isValidKey(key)) {
+    if (_mapId < 0) {
+        qCDebug(GeoMapTerrariumTileFetcherLog) << "requestPatchHeights: elevation provider not registered";
         _pending.insert(requestId, PendingRequest{});
         _failAsync(requestId);
         return requestId;
@@ -157,11 +163,15 @@ int TerrariumTileFetcher::requestPatchHeights(const TileMath::TileKey& key, int 
 
     const bool inFlight = _fetchInFlight(pending.fetchKey);
     _waiters[pending.fetchKey].append(requestId);
+    qCDebug(GeoMapTerrariumTileFetcherVerboseLog)
+        << "requestPatchHeights: key" << key << "requestId" << requestId << "fetchKey" << pending.fetchKey
+        << (inFlight ? "(joining in-flight fetch)" : "(starting fetch)");
     if (inFlight) {
         return requestId;  // a fetch for this tile is already in flight; it serves all waiters
     }
 
     if (!_startFetch(pending.fetchKey)) {
+        qCDebug(GeoMapTerrariumTileFetcherLog) << "requestPatchHeights: could not start fetch for" << pending.fetchKey;
         _waiters.remove(pending.fetchKey);
         _failAsync(requestId);
     }
@@ -170,7 +180,13 @@ int TerrariumTileFetcher::requestPatchHeights(const TileMath::TileKey& key, int 
 
 bool TerrariumTileFetcher::requestTile(const TileMath::TileKey& key)
 {
-    if (!_heightField || (_mapId < 0) || !TileMath::isValidKey(key)) {
+    if (!_heightField || !TileMath::isValidKey(key)) {
+        qCWarning(GeoMapTerrariumTileFetcherLog)
+            << "requestTile rejected: key" << key << "heightFieldSet" << (_heightField != nullptr);
+        return false;
+    }
+    if (_mapId < 0) {
+        qCDebug(GeoMapTerrariumTileFetcherLog) << "requestTile: elevation provider not registered";
         return false;
     }
 
@@ -182,11 +198,14 @@ bool TerrariumTileFetcher::requestTile(const TileMath::TileKey& key)
     const bool inFlight = _fetchInFlight(fetchKey);
     _fieldRequests.insert(fetchKey);
     _lastFetchKey = fetchKey;
+    qCDebug(GeoMapTerrariumTileFetcherVerboseLog)
+        << "requestTile: fetchKey" << fetchKey << (inFlight ? "(joining in-flight fetch)" : "(starting fetch)");
     if (inFlight) {
         return true;  // piggyback on the fetch already serving patch waiters
     }
 
     if (!_startFetch(fetchKey)) {
+        qCDebug(GeoMapTerrariumTileFetcherLog) << "requestTile: could not start fetch for" << fetchKey;
         _fieldRequests.remove(fetchKey);
         return false;
     }
@@ -209,24 +228,29 @@ bool TerrariumTileFetcher::_startFetch(const TileMath::TileKey& fetchKey)
             return;                                       // all interest cancelled while the lookup was in flight
         }
         if (!tile || tile->img.isEmpty()) {
+            qCDebug(GeoMapTerrariumTileFetcherLog) << "cache returned empty tile for" << fetchKey;
             _failAll(fetchKey);
             return;
         }
         const QImage image = decodeTile(tile->img);
         if (image.isNull()) {
+            qCDebug(GeoMapTerrariumTileFetcherLog) << "cached tile for" << fetchKey << "failed to decode";
             _failAll(fetchKey);
             return;
         }
+        qCDebug(GeoMapTerrariumTileFetcherVerboseLog) << "tile" << fetchKey << "served from cache";
         _deliverAll(fetchKey, image);
     });
     connect(task, &QGCMapTask::error, this, [this, fetchKey](QGCMapTask::TaskType, const QString&) {
         if (!_fetchInFlight(fetchKey)) {
             return;
         }
+        qCDebug(GeoMapTerrariumTileFetcherVerboseLog) << "tile" << fetchKey << "not cached, fetching from network";
         _fetchFromNetwork(fetchKey);
     });
 
     if (!getQGCMapEngine()->addTask(task)) {
+        qCDebug(GeoMapTerrariumTileFetcherLog) << "could not queue cache lookup for" << fetchKey;
         task->deleteLater();  // never enqueued: the worker will not clean it up
         return false;
     }
@@ -256,6 +280,7 @@ void TerrariumTileFetcher::cancelRequest(int requestId)
     }
     QNetworkReply* const reply = _activeReplies.take(fetchKey);
     if (reply) {
+        qCDebug(GeoMapTerrariumTileFetcherVerboseLog) << "cancelRequest: aborting network fetch for" << fetchKey;
         reply->abort();        // finished handler is a no-op once no waiters remain
         reply->deleteLater();  // don't rely on abort emitting finished for cleanup
     }
@@ -294,11 +319,15 @@ void TerrariumTileFetcher::_fetchFromNetwork(const TileMath::TileKey& fetchKey)
             return;  // all interest cancelled (abort also lands here)
         }
         if (reply->error() != QNetworkReply::NoError) {
+            qCDebug(GeoMapTerrariumTileFetcherLog)
+                << "network fetch failed for" << fetchKey << reply->error() << reply->errorString() << "httpStatus"
+                << reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
             _failAll(fetchKey);
             return;
         }
         const QByteArray data = reply->readAll();
         if (data.isEmpty()) {
+            qCDebug(GeoMapTerrariumTileFetcherLog) << "network fetch for" << fetchKey << "returned empty body";
             _failAll(fetchKey);
             return;
         }
@@ -306,9 +335,13 @@ void TerrariumTileFetcher::_fetchFromNetwork(const TileMath::TileKey& fetchKey)
         // pages): a cached invalid tile would fail every retry from then on
         const QImage image = decodeTile(data);
         if (image.isNull()) {
+            qCDebug(GeoMapTerrariumTileFetcherLog)
+                << "network body for" << fetchKey << "is not a terrarium tile," << data.size() << "bytes";
             _failAll(fetchKey);
             return;
         }
+        qCDebug(GeoMapTerrariumTileFetcherVerboseLog)
+            << "tile" << fetchKey << "fetched from network," << data.size() << "bytes, caching";
         // Store back so the shared cache serves this tile from now on
         const QString providerType = terrariumProviderType();
         QGeoFileTileCacheQGC::cacheTile(providerType, fetchKey.x, fetchKey.y, fetchKey.zoom, data,
@@ -319,11 +352,14 @@ void TerrariumTileFetcher::_fetchFromNetwork(const TileMath::TileKey& fetchKey)
 
 void TerrariumTileFetcher::_deliverAll(const TileMath::TileKey& fetchKey, const QImage& image)
 {
-    if (_fieldRequests.remove(fetchKey) && _heightField) {
+    const bool forField = _fieldRequests.remove(fetchKey) && _heightField;
+    if (forField) {
         _heightField->insertTile(fetchKey, gridFromImage(image));
     }
 
     const QList<int> requestIds = _waiters.take(fetchKey);
+    qCDebug(GeoMapTerrariumTileFetcherVerboseLog)
+        << "delivering tile" << fetchKey << "to" << requestIds.count() << "waiters, field insert:" << forField;
     for (int requestId : requestIds) {
         if (_pending.contains(requestId)) {
             _deliver(requestId, image);
@@ -338,6 +374,8 @@ void TerrariumTileFetcher::_failAll(const TileMath::TileKey& fetchKey)
     _fieldRequests.remove(fetchKey);
 
     const QList<int> requestIds = _waiters.take(fetchKey);
+    qCDebug(GeoMapTerrariumTileFetcherLog)
+        << "tile" << fetchKey << "failed, failing" << requestIds.count() << "waiters";
     for (int requestId : requestIds) {
         if (_pending.contains(requestId)) {
             _finishFailed(requestId);
