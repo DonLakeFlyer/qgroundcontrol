@@ -65,6 +65,22 @@ ElevationTilePyramid::Grid gradientGrid()
     return grid;
 }
 
+/// Quadratic along y: fine-LOD edge samples deviate from the coarse edge's
+/// linear segments, so unstitched edges produce detectable T-junction gaps
+/// (a linear field would make stitched and unstitched edges identical)
+ElevationTilePyramid::Grid quadraticGrid()
+{
+    ElevationTilePyramid::Grid grid;
+    grid.width = 4;
+    grid.height = 4;
+    for (int row = 0; row < 4; row++) {
+        for (int col = 0; col < 4; col++) {
+            grid.heights.append(float(row * row * 40));
+        }
+    }
+    return grid;
+}
+
 }  // namespace
 
 void PatchGeometryTest::_flatMeshLayout()
@@ -292,6 +308,138 @@ void PatchGeometryTest::_resampleAfterFieldGainsData()
         QCOMPARE(vertexAt(sampledData, i)[2], 100.0f);
     }
     QCOMPARE_GT(spy.count(), emptySampleSignals);
+}
+
+void PatchGeometryTest::_stitchedEdgeLiesOnCoarseSegments()
+{
+    // Fine patch {11,12,4} is the NE quarter of {5,6,3}: its east edge is the
+    // upper half of coarse neighbor {6,6,3}'s west edge. The z3 tile under
+    // the coarse patch is quadratic in y, so the fine edge bows away from the
+    // coarse edge's linear segments unless stitched.
+    HeightField field;
+    QVERIFY(field.insertTile(TileMath::TileKey{0, 0, 0}, uniformGrid(0.0f)));
+    QVERIFY(field.insertTile(TileMath::TileKey{6, 6, 3}, quadraticGrid()));
+
+    PatchGeometry coarse;
+    coarse.setGridSize(kGrid);
+    coarse.setSpan(kSpan);
+    coarse.setHeightField(&field);
+    QVERIFY(coarse.sampleFromField(TileMath::TileKey{6, 6, 3}));
+
+    PatchGeometry fine;
+    fine.setGridSize(kGrid);
+    fine.setSpan(kSpan);
+    fine.setHeightField(&field);
+    fine.setEdgeLodDeltas(0, 0, 0, 1);  // east neighbor renders one level coarser
+    QVERIFY(fine.sampleFromField(TileMath::TileKey{11, 12, 4}));
+
+    const QByteArray fineData = fine.vertexData();
+    const QByteArray coarseData = coarse.vertexData();
+    const auto fineEastZ = [&](int row) { return vertexAt(fineData, (row * (kGrid + 1)) + kGrid)[2]; };
+    const auto coarseWestZ = [&](int row) { return vertexAt(coarseData, row * (kGrid + 1))[2]; };
+
+    // Fine row r maps to coarse row r/2 (fine edge covers the coarse edge's
+    // north half). Even rows coincide with coarse vertices (corners included);
+    // odd rows must lie exactly on the coarse segment between them.
+    for (int row = 0; row <= kGrid; row += 2) {
+        QCOMPARE(fineEastZ(row), coarseWestZ(row / 2));
+    }
+    for (int row = 1; row <= kGrid; row += 2) {
+        const float a = coarseWestZ((row - 1) / 2);
+        const float b = coarseWestZ((row + 1) / 2);
+        QCOMPARE(fineEastZ(row), a + ((b - a) * 0.5f));
+    }
+
+    // Sanity: the quadratic field actually bows, so stitching changed values
+    PatchGeometry unstitched;
+    unstitched.setGridSize(kGrid);
+    unstitched.setSpan(kSpan);
+    unstitched.setHeightField(&field);
+    QVERIFY(unstitched.sampleFromField(TileMath::TileKey{11, 12, 4}));
+    const QByteArray unstitchedData = unstitched.vertexData();
+    QCOMPARE_NE(vertexAt(unstitchedData, (1 * (kGrid + 1)) + kGrid)[2], fineEastZ(1));
+}
+
+void PatchGeometryTest::_stitchAppliesToAllFourEdges()
+{
+    // Heights quadratic in both directions so every edge bows away from its
+    // linear segments; all four deltas active at once
+    PatchGeometry geometry;
+    geometry.setGridSize(kGrid);
+    geometry.setSpan(kSpan);
+    QList<float> heights;
+    for (int row = 0; row <= kGrid; row++) {
+        for (int col = 0; col <= kGrid; col++) {
+            heights.append(((row * row) + (col * col)) * 10.0f);
+        }
+    }
+    geometry.setHeights(heights);
+    geometry.setEdgeLodDeltas(1, 1, 1, 1);
+
+    const QByteArray data = geometry.vertexData();
+    const auto z = [&](int row, int col) { return vertexAt(data, (row * (kGrid + 1)) + col)[2]; };
+    const auto raw = [&](int row, int col) { return heights.at((row * (kGrid + 1)) + col); };
+    const auto lerpMid = [&](float a, float b) { return a + ((b - a) * 0.5f); };
+
+    for (int i = 1; i < kGrid; i += 2) {
+        QCOMPARE(z(0, i), lerpMid(raw(0, i - 1), raw(0, i + 1)));              // north
+        QCOMPARE(z(kGrid, i), lerpMid(raw(kGrid, i - 1), raw(kGrid, i + 1)));  // south
+        QCOMPARE(z(i, 0), lerpMid(raw(i - 1, 0), raw(i + 1, 0)));              // west
+        QCOMPARE(z(i, kGrid), lerpMid(raw(i - 1, kGrid), raw(i + 1, kGrid)));  // east
+        QCOMPARE_NE(z(0, i), raw(0, i));                                       // sanity: stitching actually moved it
+    }
+
+    // Interior vertices are untouched
+    QCOMPARE(z(1, 1), raw(1, 1));
+    QCOMPARE(z(2, 3), raw(2, 3));
+}
+
+void PatchGeometryTest::_stitchInvalidDeltaWarns()
+{
+    PatchGeometry geometry;
+    geometry.setGridSize(kGrid);
+
+    expectLogMessage("GeoMap.PatchGeometry", QtWarningMsg, QRegularExpression("^setEdgeLodDeltas rejected:"));
+    geometry.setEdgeLodDeltas(-1, 0, 0, 0);  // negative delta
+    verifyExpectedLogMessage();
+
+    // 2^3 = 8 does not divide gridSize 4: coincident vertices would not exist
+    expectLogMessage("GeoMap.PatchGeometry", QtWarningMsg, QRegularExpression("^setEdgeLodDeltas rejected:"));
+    geometry.setEdgeLodDeltas(0, 0, 0, 3);
+    verifyExpectedLogMessage();
+
+    // Rejected calls leave the mesh unconstrained: ramp heights pass through
+    geometry.setHeights(rampHeights(kGrid));
+    const QByteArray data = geometry.vertexData();
+    for (int row = 0; row <= kGrid; row++) {
+        QCOMPARE(vertexAt(data, (row * (kGrid + 1)) + kGrid)[2], 10.0f * row);
+    }
+}
+
+void PatchGeometryTest::_gridSizeChangeResetsInvalidDeltas()
+{
+    PatchGeometry geometry;
+    geometry.setGridSize(8);
+    geometry.setEdgeLodDeltas(0, 0, 0, 3);  // valid: 2^3 divides 8
+
+    // Shrinking the grid strands the delta: it must be reset with a warning
+    expectLogMessage("GeoMap.PatchGeometry", QtWarningMsg, QRegularExpression("^setGridSize reset edge LOD deltas"));
+    geometry.setGridSize(kGrid);
+    verifyExpectedLogMessage();
+
+    // A still-valid delta survives a grid size change
+    geometry.setEdgeLodDeltas(0, 0, 0, 1);
+    geometry.setGridSize(8);  // 2^1 divides 8: no reset, no warning
+    QList<float> heights;
+    for (int row = 0; row <= 8; row++) {
+        for (int col = 0; col <= 8; col++) {
+            heights.append(float(row * row));
+        }
+    }
+    geometry.setHeights(heights);
+    const QByteArray data = geometry.vertexData();
+    const auto eastZ = [&](int row) { return vertexAt(data, (row * 9) + 8)[2]; };
+    QCOMPARE(eastZ(1), eastZ(0) + ((eastZ(2) - eastZ(0)) * 0.5f));  // stitched, not raw 1.0f
 }
 
 UT_REGISTER_TEST(PatchGeometryTest, TestLabel::Unit)

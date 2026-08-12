@@ -3,6 +3,7 @@
 #include <QtGui/QVector3D>
 
 #include <algorithm>
+#include <bit>
 #include <cmath>
 
 #include "HeightField.h"
@@ -22,6 +23,14 @@ void PatchGeometry::setGridSize(int gridSize)
         return;
     }
     _gridSize = clamped;
+    for (const int delta : {_lodDeltaNorth, _lodDeltaSouth, _lodDeltaWest, _lodDeltaEast}) {
+        if ((delta > 0) && ((_gridSize % (1 << delta)) != 0)) {
+            qCWarning(GeoMapPatchGeometryLog) << "setGridSize reset edge LOD deltas: delta" << delta
+                                              << "has no coincident vertices at gridSize" << _gridSize;
+            _lodDeltaNorth = _lodDeltaSouth = _lodDeltaWest = _lodDeltaEast = 0;
+            break;
+        }
+    }
     emit gridSizeChanged();
     _rebuild();
 }
@@ -62,15 +71,71 @@ bool PatchGeometry::sampleFromField(const TileMath::TileKey& key)
     return true;
 }
 
-float PatchGeometry::_heightAt(int row, int col) const
+void PatchGeometry::setEdgeLodDeltas(int north, int south, int west, int east)
+{
+    // Bounding delta first keeps the shift below well-defined
+    static_assert(std::has_single_bit(static_cast<unsigned>(kMaxGridSize)), "kMaxLodDelta assumes a power of two");
+    constexpr int kMaxLodDelta = std::countr_zero(static_cast<unsigned>(kMaxGridSize));
+    for (const int delta : {north, south, west, east}) {
+        if ((delta < 0) || (delta > kMaxLodDelta) || ((delta > 0) && ((_gridSize % (1 << delta)) != 0))) {
+            qCWarning(GeoMapPatchGeometryLog)
+                << "setEdgeLodDeltas rejected: delta" << delta << "has no coincident vertices at gridSize" << _gridSize;
+            return;
+        }
+    }
+    if ((north == _lodDeltaNorth) && (south == _lodDeltaSouth) && (west == _lodDeltaWest) && (east == _lodDeltaEast)) {
+        return;
+    }
+    _lodDeltaNorth = north;
+    _lodDeltaSouth = south;
+    _lodDeltaWest = west;
+    _lodDeltaEast = east;
+    _rebuild();
+}
+
+float PatchGeometry::_rawHeightAt(int row, int col) const
 {
     const int verticesPerEdge = _gridSize + 1;
     if (_heights.count() != (verticesPerEdge * verticesPerEdge)) {
         return 0.0f;  // missing or mismatched grid renders flat
     }
-    const int clampedRow = std::clamp(row, 0, _gridSize);
-    const int clampedCol = std::clamp(col, 0, _gridSize);
-    return _heights.at((clampedRow * verticesPerEdge) + clampedCol);
+    return _heights.at((row * verticesPerEdge) + col);
+}
+
+float PatchGeometry::_heightAt(int row, int col) const
+{
+    const int r = std::clamp(row, 0, _gridSize);
+    const int c = std::clamp(col, 0, _gridSize);
+
+    // T-junction fix: edge vertices with a coarser neighbor are constrained
+    // to the lerp of the nearest coincident samples, which equal the coarse
+    // neighbor's vertex heights bit-for-bit (same field, same positions)
+    int delta = 0;
+    bool alongCol = false;  // lerp runs along the edge direction
+    if ((r == 0) && (_lodDeltaNorth > 0)) {
+        delta = _lodDeltaNorth;
+        alongCol = true;
+    } else if ((r == _gridSize) && (_lodDeltaSouth > 0)) {
+        delta = _lodDeltaSouth;
+        alongCol = true;
+    } else if ((c == 0) && (_lodDeltaWest > 0)) {
+        delta = _lodDeltaWest;
+    } else if ((c == _gridSize) && (_lodDeltaEast > 0)) {
+        delta = _lodDeltaEast;
+    }
+    if (delta > 0) {
+        const int step = 1 << delta;
+        const int idx = alongCol ? c : r;
+        const int base = (idx / step) * step;
+        // divisibility recheck is belt-and-suspenders: setGridSize() resets stale deltas
+        if ((idx != base) && ((_gridSize % step) == 0)) {
+            const float t = float(idx - base) / step;
+            const float a = alongCol ? _rawHeightAt(r, base) : _rawHeightAt(base, c);
+            const float b = alongCol ? _rawHeightAt(r, base + step) : _rawHeightAt(base + step, c);
+            return a + ((b - a) * t);
+        }
+    }
+    return _rawHeightAt(r, c);
 }
 
 void PatchGeometry::_rebuild()

@@ -19,4 +19,8 @@ private slots:
     void _sampleFromFieldWithoutFieldWarns();
     void _adjacentPatchesShareEdgeHeights();
     void _resampleAfterFieldGainsData();
+    void _stitchedEdgeLiesOnCoarseSegments();
+    void _stitchAppliesToAllFourEdges();
+    void _stitchInvalidDeltaWarns();
+    void _gridSizeChangeResetsInvalidDeltas();
 };

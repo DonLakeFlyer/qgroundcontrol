@@ -69,6 +69,11 @@ public:
     /// when no field is set or the key is invalid.
     bool sampleFromField(const TileMath::TileKey& key);
 
+    /// How many LOD levels coarser each edge's neighbor renders (0 = same or
+    /// finer: unconstrained). Edge vertices are constrained to the coarse
+    /// neighbor's linear segments so no T-junction cracks open.
+    void setEdgeLodDeltas(int north, int south, int west, int east);
+
 signals:
     void gridSizeChanged();
     void spanChanged();
@@ -77,9 +82,14 @@ signals:
 private:
     void _rebuild();
     float _heightAt(int row, int col) const;
+    float _rawHeightAt(int row, int col) const;
 
     int _gridSize = 16;
     qreal _span = 1000.0;
     QList<float> _heights;
     HeightField* _heightField = nullptr;
+    int _lodDeltaNorth = 0;
+    int _lodDeltaSouth = 0;
+    int _lodDeltaWest = 0;
+    int _lodDeltaEast = 0;
 };
