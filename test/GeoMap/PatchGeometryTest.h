@@ -20,6 +20,8 @@ private slots:
     void _adjacentPatchesShareEdgeHeights();
     void _resampleAfterFieldGainsData();
     void _stitchedEdgeLiesOnCoarseSegments();
+    void _stitchedNorthEdgeUsesAncestorSouthRow();
+    void _stitchAtWorldEdgeFallsBack();
     void _stitchAppliesToAllFourEdges();
     void _stitchInvalidDeltaWarns();
     void _gridSizeChangeResetsInvalidDeltas();

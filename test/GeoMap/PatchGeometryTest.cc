@@ -81,6 +81,21 @@ ElevationTilePyramid::Grid quadraticGrid()
     return grid;
 }
 
+/// Quadratic along x, linear along y: samples vary along a north/south edge
+/// (catches along-axis mistakes) and rows differ (catches edge-side flips)
+ElevationTilePyramid::Grid quadraticGridX()
+{
+    ElevationTilePyramid::Grid grid;
+    grid.width = 4;
+    grid.height = 4;
+    for (int row = 0; row < 4; row++) {
+        for (int col = 0; col < 4; col++) {
+            grid.heights.append(float((col * col * 40) + (row * 100)));
+        }
+    }
+    return grid;
+}
+
 }  // namespace
 
 void PatchGeometryTest::_flatMeshLayout()
@@ -358,6 +373,82 @@ void PatchGeometryTest::_stitchedEdgeLiesOnCoarseSegments()
     QVERIFY(unstitched.sampleFromField(TileMath::TileKey{11, 12, 4}));
     const QByteArray unstitchedData = unstitched.vertexData();
     QCOMPARE_NE(vertexAt(unstitchedData, (1 * (kGrid + 1)) + kGrid)[2], fineEastZ(1));
+}
+
+void PatchGeometryTest::_stitchedNorthEdgeUsesAncestorSouthRow()
+{
+    // Fine patch {11,12,4} sits in the top row of parent {5,6,3}: its north
+    // neighbor {11,11,4} renders from resident ancestor {5,5,3}, whose SOUTH
+    // row is the shared line, with the fine patch covering the row's east
+    // half (ancestor columns 2..4). The fine patch itself resolves to the
+    // flat z0 tile, so every correct constrained value differs from its own.
+    HeightField field;
+    QVERIFY(field.insertTile(TileMath::TileKey{0, 0, 0}, uniformGrid(0.0f)));
+    QVERIFY(field.insertTile(TileMath::TileKey{5, 5, 3}, quadraticGridX()));
+
+    PatchGeometry coarse;
+    coarse.setGridSize(kGrid);
+    coarse.setSpan(kSpan);
+    coarse.setHeightField(&field);
+    QVERIFY(coarse.sampleFromField(TileMath::TileKey{5, 5, 3}));
+
+    PatchGeometry fine;
+    fine.setGridSize(kGrid);
+    fine.setSpan(kSpan);
+    fine.setHeightField(&field);
+    fine.setEdgeLodDeltas(1, 0, 0, 0);  // north neighbor renders one level coarser
+    QVERIFY(fine.sampleFromField(TileMath::TileKey{11, 12, 4}));
+
+    const QByteArray fineData = fine.vertexData();
+    const QByteArray coarseData = coarse.vertexData();
+    const auto fineNorthZ = [&](int col) { return vertexAt(fineData, col)[2]; };
+    const auto coarseSouthZ = [&](int col) { return vertexAt(coarseData, (kGrid * (kGrid + 1)) + col)[2]; };
+
+    // Fine col c maps to coarse col 2 + c/2; even cols coincide with coarse
+    // vertices, odd cols must lie exactly on the coarse segment between them
+    for (int col = 0; col <= kGrid; col += 2) {
+        QCOMPARE(fineNorthZ(col), coarseSouthZ(2 + (col / 2)));
+    }
+    for (int col = 1; col <= kGrid; col += 2) {
+        const float a = coarseSouthZ(2 + ((col - 1) / 2));
+        const float b = coarseSouthZ(2 + ((col + 1) / 2));
+        QCOMPARE(fineNorthZ(col), a + ((b - a) * 0.5f));
+    }
+
+    // Sanity: the constraint moved the edge off the fine patch's own flat zero
+    QCOMPARE_NE(fineNorthZ(0), 0.0f);
+}
+
+void PatchGeometryTest::_stitchAtWorldEdgeFallsBack()
+{
+    // A west delta on a patch at x=0 addresses a neighbor (and ancestor)
+    // outside the world: the coarse-edge resolution must fall back to the
+    // patch's own coincident samples instead of sampling an invalid key.
+    // The zoom-1 patch spans grid-row knots of the quadratic z0 tile, so raw
+    // edge samples are not collinear and the lerp assertion is discriminating.
+    HeightField field;
+    QVERIFY(field.insertTile(TileMath::TileKey{0, 0, 0}, quadraticGrid()));
+
+    PatchGeometry geometry;
+    geometry.setGridSize(kGrid);
+    geometry.setSpan(kSpan);
+    geometry.setHeightField(&field);
+    geometry.setEdgeLodDeltas(0, 0, 1, 0);
+    QVERIFY(geometry.sampleFromField(TileMath::TileKey{0, 1, 1}));
+
+    const QByteArray data = geometry.vertexData();
+    const auto westZ = [&](int row) { return vertexAt(data, row * (kGrid + 1))[2]; };
+    for (int row = 1; row < kGrid; row += 2) {
+        QCOMPARE(westZ(row), westZ(row - 1) + ((westZ(row + 1) - westZ(row - 1)) * 0.5f));
+    }
+
+    // Sanity: fallback stitching moved odd rows off the raw quadratic samples
+    PatchGeometry unstitched;
+    unstitched.setGridSize(kGrid);
+    unstitched.setSpan(kSpan);
+    unstitched.setHeightField(&field);
+    QVERIFY(unstitched.sampleFromField(TileMath::TileKey{0, 1, 1}));
+    QCOMPARE_NE(vertexAt(unstitched.vertexData(), 1 * (kGrid + 1))[2], westZ(1));
 }
 
 void PatchGeometryTest::_stitchAppliesToAllFourEdges()

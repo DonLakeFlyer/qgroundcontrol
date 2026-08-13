@@ -12,6 +12,8 @@
 #include <QtCore/QList>
 #include <QtQuick3D/QQuick3DGeometry>
 
+#include <array>
+
 #include "TileMath.h"
 
 class HeightField;
@@ -72,11 +74,15 @@ public:
 
     /// How many LOD levels coarser each edge's neighbor renders (0 = same or
     /// finer: unconstrained). Edge vertices are constrained to the coarse
-    /// neighbor's linear segments so no T-junction cracks open.
+    /// neighbor's real rendered edge, resolved from the height field (see
+    /// _coarseEdgeSamples) so no T-junction cracks open.
     void setEdgeLodDeltas(int north, int south, int west, int east);
 
     /// QML-bindable form of the deltas: {north, south, west, east}
-    QList<int> edgeLodDeltas() const { return {_lodDeltaNorth, _lodDeltaSouth, _lodDeltaWest, _lodDeltaEast}; }
+    QList<int> edgeLodDeltas() const
+    {
+        return {_lodDelta[kNorth], _lodDelta[kSouth], _lodDelta[kWest], _lodDelta[kEast]};
+    }
 
     void setEdgeLodDeltas(const QList<int>& deltas);
 
@@ -87,16 +93,32 @@ signals:
     void edgeLodDeltasChanged();
 
 private:
+    /// Edge index order shared by the delta/offset/sample member arrays: N,S,W,E
+    enum Edge
+    {
+        kNorth,
+        kSouth,
+        kWest,
+        kEast,
+        kEdgeCount
+    };
+
     void _rebuild();
     float _heightAt(int row, int col) const;
     float _rawHeightAt(int row, int col) const;
+    void _resolveCoarseEdges();
+    QList<float> _coarseEdgeSamples(Edge edge) const;
+    float _coarseHeightAt(Edge edge, int alongIdx) const;
 
     int _gridSize = 16;
     qreal _span = 1000.0;
     QList<float> _heights;
     HeightField* _heightField = nullptr;
-    int _lodDeltaNorth = 0;
-    int _lodDeltaSouth = 0;
-    int _lodDeltaWest = 0;
-    int _lodDeltaEast = 0;
+    TileMath::TileKey _key{0, 0, -1};  ///< this patch's own key; invalid until sampleFromField
+    std::array<int, kEdgeCount> _lodDelta{};
+
+    /// Real neighbor edge samples for each coarser edge, resolved from the
+    /// height field at the actual resident ancestor covering that neighbor
+    /// (see _resolveCoarseEdges); empty when unconstrained or unresolvable.
+    std::array<QList<float>, kEdgeCount> _coarseEdge;
 };

@@ -21,6 +21,7 @@ private slots:
     void _noRegionChangedOnRejectedInsert();
     void _samplePatchLookupCountGate();
     void _samplePatchLookupCountGateMixedZooms();
+    void _samplePatchSingleLookupPerPatch();
     void _memoInvalidatedOnInsert();
     void _samplePatchBenchmark();
 };

@@ -121,23 +121,27 @@ QList<float> HeightField::samplePatch(const TileMath::TileKey& key, int gridSize
         return QList<float>();
     }
 
-    // Vertex positions are computed from global dyadic fractions
-    // (key*gridSize + index over tileCount*gridSize) instead of
-    // corner + offset sums: coincident vertices of neighboring patches — even
-    // across zoom levels — then produce bit-identical coordinates, so the
-    // half-open tile assignment in heightAt resolves both sides to the same
-    // data. An ulp of difference on a tile boundary flips which tile answers,
-    // stepping a rendered edge by the full fine/coarse data difference.
-    const double world = TileMath::worldSize();
-    const double half = world / 2.0;
-    const double denominator = static_cast<double>(qint64(1) << key.zoom) * gridSize;
+    // The patch's backing view is resolved once, by the patch's own key —
+    // never per vertex — so which data answers is decided by a single piece
+    // of integer key arithmetic (cesium-style). Vertices then only
+    // interpolate within that one grid, at dyadic offsets within the view's
+    // subwindow: coincident vertices of neighboring patches resolving to the
+    // same backing tile compute bit-identical subwindow UVs, so they sample
+    // bit-identical heights.
+    const ElevationTilePyramid::View view = _pyramid.bestTileFor(key);
     QList<float> heights;
     heights.reserve(qsizetype(gridSize + 1) * (gridSize + 1));
+    if (!view.isValid()) {
+        heights.fill(0.0f, qsizetype(gridSize + 1) * (gridSize + 1));
+        return heights;
+    }
+
+    const QRectF& sub = view.subWindow;
     for (int row = 0; row <= gridSize; row++) {
-        const double y = half - (world * (((qint64(key.y) * gridSize) + row) / denominator));
+        const double v = sub.y() + (sub.height() * row / gridSize);
         for (int col = 0; col <= gridSize; col++) {
-            const double x = -half + (world * (((qint64(key.x) * gridSize) + col) / denominator));
-            heights.append(static_cast<float>(heightAt(QPointF(x, y))));
+            const double u = sub.x() + (sub.width() * col / gridSize);
+            heights.append(static_cast<float>(heightAtUV(*view.grid, u, v)));
         }
     }
     return heights;

@@ -283,6 +283,20 @@ void HeightFieldTest::_samplePatchLookupCountGateMixedZooms()
     QCOMPARE_LE(field.lookupCountForTest() - before, 40);
 }
 
+void HeightFieldTest::_samplePatchSingleLookupPerPatch()
+{
+    // Design cutover: samplePatch resolves its backing view once (bestTileFor
+    // on the patch's own key) and samples the grid directly by subwindow UV,
+    // never per-vertex heightAt/world-position resolution
+    HeightField field;
+    QVERIFY(field.insertTile(TileKey{5, 6, 3}, uniformGrid(50.0f)));
+
+    const qint64 before = field.lookupCountForTest();
+    const QList<float> heights = field.samplePatch(TileKey{5, 6, 3}, 16);
+    QCOMPARE(heights.size(), 17 * 17);
+    QCOMPARE(field.lookupCountForTest() - before, 1);
+}
+
 void HeightFieldTest::_memoInvalidatedOnInsert()
 {
     HeightField field;

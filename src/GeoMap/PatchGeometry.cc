@@ -23,11 +23,11 @@ void PatchGeometry::setGridSize(int gridSize)
         return;
     }
     _gridSize = clamped;
-    for (const int delta : {_lodDeltaNorth, _lodDeltaSouth, _lodDeltaWest, _lodDeltaEast}) {
+    for (const int delta : _lodDelta) {
         if ((delta > 0) && ((_gridSize % (1 << delta)) != 0)) {
             qCWarning(GeoMapPatchGeometryLog) << "setGridSize reset edge LOD deltas: delta" << delta
                                               << "has no coincident vertices at gridSize" << _gridSize;
-            _lodDeltaNorth = _lodDeltaSouth = _lodDeltaWest = _lodDeltaEast = 0;
+            _lodDelta.fill(0);
             break;
         }
     }
@@ -67,6 +67,7 @@ bool PatchGeometry::sampleFromField(const TileMath::TileKey& key)
             << "sampleFromField rejected: field returned no samples, key" << key << "gridSize" << _gridSize;
         return false;
     }
+    _key = key;
     setHeights(sampled);
     return true;
 }
@@ -83,20 +84,21 @@ void PatchGeometry::setEdgeLodDeltas(int north, int south, int west, int east)
             return;
         }
     }
-    if ((north == _lodDeltaNorth) && (south == _lodDeltaSouth) && (west == _lodDeltaWest) && (east == _lodDeltaEast)) {
+    if ((north == _lodDelta[kNorth]) && (south == _lodDelta[kSouth]) && (west == _lodDelta[kWest]) &&
+        (east == _lodDelta[kEast])) {
         return;
     }
-    _lodDeltaNorth = north;
-    _lodDeltaSouth = south;
-    _lodDeltaWest = west;
-    _lodDeltaEast = east;
+    _lodDelta[kNorth] = north;
+    _lodDelta[kSouth] = south;
+    _lodDelta[kWest] = west;
+    _lodDelta[kEast] = east;
     emit edgeLodDeltasChanged();
     _rebuild();
 }
 
 void PatchGeometry::setEdgeLodDeltas(const QList<int>& deltas)
 {
-    if (deltas.count() != 4) {
+    if (deltas.count() != kEdgeCount) {
         qCWarning(GeoMapPatchGeometryLog)
             << "setEdgeLodDeltas rejected: expected {N,S,W,E}, got" << deltas.count() << "deltas";
         return;
@@ -118,39 +120,111 @@ float PatchGeometry::_heightAt(int row, int col) const
     const int r = std::clamp(row, 0, _gridSize);
     const int c = std::clamp(col, 0, _gridSize);
 
-    // T-junction fix: edge vertices with a coarser neighbor are constrained
-    // to the lerp of the nearest coincident samples, which equal the coarse
-    // neighbor's vertex heights bit-for-bit (same field, same positions)
-    int delta = 0;
+    // T-junction fix: edge vertices with a coarser neighbor are constrained to
+    // the lerp of the neighbor's own real rendered edge samples (resolved in
+    // _coarseEdge from the height field at the neighbor's actual resident
+    // ancestor) rather than assumed from our own data, which generally
+    // belongs to a different backing tile than the neighbor across a
+    // T-junction (see DESIGN-cesium-style-sampling.md). A corner on two
+    // constrained edges takes the first match (N,S,W,E precedence); skirts
+    // hide the residual three-LOD corner mismatch.
+    Edge edge = kNorth;
+    bool matched = false;
     bool alongCol = false;  // lerp runs along the edge direction
-    if ((r == 0) && (_lodDeltaNorth > 0)) {
-        delta = _lodDeltaNorth;
+    if ((r == 0) && (_lodDelta[kNorth] > 0)) {
+        edge = kNorth;
         alongCol = true;
-    } else if ((r == _gridSize) && (_lodDeltaSouth > 0)) {
-        delta = _lodDeltaSouth;
+        matched = true;
+    } else if ((r == _gridSize) && (_lodDelta[kSouth] > 0)) {
+        edge = kSouth;
         alongCol = true;
-    } else if ((c == 0) && (_lodDeltaWest > 0)) {
-        delta = _lodDeltaWest;
-    } else if ((c == _gridSize) && (_lodDeltaEast > 0)) {
-        delta = _lodDeltaEast;
+        matched = true;
+    } else if ((c == 0) && (_lodDelta[kWest] > 0)) {
+        edge = kWest;
+        matched = true;
+    } else if ((c == _gridSize) && (_lodDelta[kEast] > 0)) {
+        edge = kEast;
+        matched = true;
     }
-    if (delta > 0) {
-        const int step = 1 << delta;
+    if (matched) {
+        const int step = 1 << _lodDelta[edge];
         const int idx = alongCol ? c : r;
         const int base = (idx / step) * step;
-        // divisibility recheck is belt-and-suspenders: setGridSize() resets stale deltas
-        if ((idx != base) && ((_gridSize % step) == 0)) {
-            const float t = float(idx - base) / step;
-            const float a = alongCol ? _rawHeightAt(r, base) : _rawHeightAt(base, c);
-            const float b = alongCol ? _rawHeightAt(r, base + step) : _rawHeightAt(base + step, c);
-            return a + ((b - a) * t);
+        // No height field/key context (plain setHeights() use, e.g. mesh-math
+        // unit tests): fall back to the pre-cutover assumption that our own
+        // coincident samples already equal the coarse neighbor's.
+        const bool haveCoarseData = !_coarseEdge[edge].isEmpty();
+        if (idx == base) {
+            return haveCoarseData ? _coarseHeightAt(edge, base) : _rawHeightAt(r, c);
         }
+        const float t = float(idx - base) / step;
+        const float a =
+            haveCoarseData ? _coarseHeightAt(edge, base) : (alongCol ? _rawHeightAt(r, base) : _rawHeightAt(base, c));
+        const float b = haveCoarseData ? _coarseHeightAt(edge, base + step)
+                                       : (alongCol ? _rawHeightAt(r, base + step) : _rawHeightAt(base + step, c));
+        return a + ((b - a) * t);
     }
     return _rawHeightAt(r, c);
 }
 
+void PatchGeometry::_resolveCoarseEdges()
+{
+    for (int edge = 0; edge < kEdgeCount; edge++) {
+        _coarseEdge[edge] = _coarseEdgeSamples(static_cast<Edge>(edge));
+    }
+}
+
+QList<float> PatchGeometry::_coarseEdgeSamples(Edge edge) const
+{
+    const int delta = _lodDelta[edge];
+    // divisibility recheck is belt-and-suspenders: setGridSize() resets stale deltas
+    if ((delta <= 0) || !_heightField || (_key.zoom < 0) || ((_gridSize % (1 << delta)) != 0)) {
+        return QList<float>();
+    }
+
+    // The missing same-zoom neighbor across this edge is rendered by its own
+    // first resident ancestor; that ancestor cannot cover our own tile too
+    // (else we wouldn't be a separately resident, finer patch), so the shared
+    // line always sits on the ancestor's own outer edge, never an interior row/column.
+    static constexpr int kDx[kEdgeCount] = {0, 0, -1, 1};  // N,S,W,E
+    static constexpr int kDy[kEdgeCount] = {-1, 1, 0, 0};
+    const TileMath::TileKey neighbor{_key.x + kDx[edge], _key.y + kDy[edge], _key.zoom};
+    const TileMath::TileKey ancestor{neighbor.x >> delta, neighbor.y >> delta, neighbor.zoom - delta};
+    if (!TileMath::isValidKey(ancestor)) {
+        return QList<float>();
+    }
+    const QList<float> ancestorHeights = _heightField->samplePatch(ancestor, _gridSize);
+    if (ancestorHeights.isEmpty()) {
+        return QList<float>();
+    }
+
+    const int verticesPerEdge = _gridSize + 1;
+    const bool fixedIsRow = (edge == kNorth) || (edge == kSouth);
+    const int fixed = ((edge == kNorth) || (edge == kWest)) ? _gridSize : 0;
+    const int along = fixedIsRow ? (_key.x - (ancestor.x << delta)) : (_key.y - (ancestor.y << delta));
+    const int coarseSpan = _gridSize >> delta;
+
+    QList<float> samples;
+    samples.reserve(coarseSpan + 1);
+    for (int k = 0; k <= coarseSpan; k++) {
+        const int ancestorIdx = (along * coarseSpan) + k;
+        const int row = fixedIsRow ? fixed : ancestorIdx;
+        const int col = fixedIsRow ? ancestorIdx : fixed;
+        samples.append(ancestorHeights.at((row * verticesPerEdge) + col));
+    }
+    return samples;
+}
+
+float PatchGeometry::_coarseHeightAt(Edge edge, int alongIdx) const
+{
+    const int step = 1 << _lodDelta[edge];
+    return _coarseEdge[edge].at(alongIdx / step);
+}
+
 void PatchGeometry::_rebuild()
 {
+    _resolveCoarseEdges();
+
     const int verticesPerEdge = _gridSize + 1;
     const int gridVertexCount = verticesPerEdge * verticesPerEdge;
     const int skirtVertexCount = 4 * verticesPerEdge;
