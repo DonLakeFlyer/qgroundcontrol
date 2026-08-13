@@ -38,6 +38,7 @@ class PatchGeometry : public QQuick3DGeometry
     Q_PROPERTY(int gridSize READ gridSize WRITE setGridSize NOTIFY gridSizeChanged)
     Q_PROPERTY(qreal span READ span WRITE setSpan NOTIFY spanChanged)
     Q_PROPERTY(QList<float> heights READ heights WRITE setHeights NOTIFY heightsChanged)
+    Q_PROPERTY(QList<int> edgeLodDeltas READ edgeLodDeltas WRITE setEdgeLodDeltas NOTIFY edgeLodDeltasChanged)
 
 public:
     explicit PatchGeometry(QQuick3DObject* parent = nullptr);
@@ -74,10 +75,16 @@ public:
     /// neighbor's linear segments so no T-junction cracks open.
     void setEdgeLodDeltas(int north, int south, int west, int east);
 
+    /// QML-bindable form of the deltas: {north, south, west, east}
+    QList<int> edgeLodDeltas() const { return {_lodDeltaNorth, _lodDeltaSouth, _lodDeltaWest, _lodDeltaEast}; }
+
+    void setEdgeLodDeltas(const QList<int>& deltas);
+
 signals:
     void gridSizeChanged();
     void spanChanged();
     void heightsChanged();
+    void edgeLodDeltasChanged();
 
 private:
     void _rebuild();

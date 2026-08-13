@@ -41,8 +41,14 @@ public:
     static constexpr int kMaxGridSize = 4096;
 
     /// Stores a decoded tile in the backing pyramid; invalid keys/grids
-    /// rejected. Emits regionChanged for the tile's world extent on success.
+    /// rejected. Emits regionChanged for the tile's world extent on success,
+    /// and additionally for the extent of any tile the insert evicted —
+    /// eviction changes the answer there too.
     bool insertTile(const TileMath::TileKey& key, ElevationTilePyramid::Grid grid);
+
+    /// Tiles that must not be evicted because they back rendered patches
+    /// (or resolve them as ancestors); see ElevationTilePyramid::setPinnedKeys
+    void setPinnedKeys(QSet<TileMath::TileKey> keys) { _pyramid.setPinnedKeys(std::move(keys)); }
 
     /// Best-estimate height (meters) at a mercator world position; 0.0 where
     /// no stored tile covers the position
@@ -74,14 +80,13 @@ private:
     ElevationTilePyramid _pyramid;
 
     // Memoized last resolved view: adjacent sample positions almost always
-    // resolve to the same stored tile, so heightAt reuses it when the
-    // position is inside the tile. Only populated when the tile has no
-    // stored descendant (nothing finer could override it), and invalidated
-    // on every insert (the view's grid pointer is only valid until then).
+    // resolve to the same stored tile, so heightAt reuses it when the query
+    // key resolves to it (same arithmetic as the full lookup). Only populated
+    // when the tile has no stored descendant (nothing finer could override
+    // it), and invalidated on every insert (the view's grid pointer is only
+    // valid until then).
     mutable ElevationTilePyramid::View _memoView;
     mutable double _memoMinX = 0.0;
-    mutable double _memoMaxX = 0.0;
-    mutable double _memoMinY = 0.0;
     mutable double _memoMaxY = 0.0;
     mutable double _memoSpan = 0.0;
 };

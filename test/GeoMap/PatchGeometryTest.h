@@ -23,4 +23,5 @@ private slots:
     void _stitchAppliesToAllFourEdges();
     void _stitchInvalidDeltaWarns();
     void _gridSizeChangeResetsInvalidDeltas();
+    void _edgeLodDeltasListProperty();
 };

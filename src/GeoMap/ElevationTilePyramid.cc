@@ -36,14 +36,17 @@ void adjustAncestorCounts(QHash<TileMath::TileKey, int>& counts, const TileMath:
 
 }  // namespace
 
-bool ElevationTilePyramid::insertTile(const TileMath::TileKey& key, Grid grid)
+bool ElevationTilePyramid::insertTile(const TileMath::TileKey& key, Grid grid, TileMath::TileKey* evictedKey)
 {
     if (!TileMath::isValidKey(key) || !grid.isValid()) {
         return false;
     }
     const bool replacing = _tiles.contains(key);
     if (!replacing && (_tiles.count() >= kMaxTiles)) {
-        _evictLeastRecentlyUsed();
+        const TileMath::TileKey evicted = _evictLeastRecentlyUsed();
+        if (TileMath::isValidKey(evicted) && evictedKey) {
+            *evictedKey = evicted;
+        }
     }
     _tiles.insert(key, std::move(grid));
     _lastUsed.insert(key, ++_useTick);
@@ -53,15 +56,22 @@ bool ElevationTilePyramid::insertTile(const TileMath::TileKey& key, Grid grid)
     return true;
 }
 
-void ElevationTilePyramid::_evictLeastRecentlyUsed()
+TileMath::TileKey ElevationTilePyramid::_evictLeastRecentlyUsed()
 {
-    TileMath::TileKey lruKey{};
+    // Pinned tiles back rendered patches: never evict them. When everything
+    // is pinned there is no victim and the working set grows past the cap.
+    TileMath::TileKey lruKey{0, 0, -1};
     qint64 lruTick = std::numeric_limits<qint64>::max();
     for (auto it = _lastUsed.cbegin(); it != _lastUsed.cend(); ++it) {
-        if (it.value() < lruTick) {
+        if ((it.value() < lruTick) && !_pinnedKeys.contains(it.key())) {
             lruTick = it.value();
             lruKey = it.key();
         }
+    }
+    if (!TileMath::isValidKey(lruKey)) {
+        qCDebug(GeoMapElevationTilePyramidVerboseLog)
+            << "all resident tiles pinned, growing past cap, tileCount" << _tiles.count();
+        return lruKey;
     }
     // Verbose: fires per insert once the working set is full
     qCDebug(GeoMapElevationTilePyramidVerboseLog)
@@ -69,6 +79,7 @@ void ElevationTilePyramid::_evictLeastRecentlyUsed()
     _tiles.remove(lruKey);
     _lastUsed.remove(lruKey);
     adjustAncestorCounts(_descendantCounts, lruKey, -1);
+    return lruKey;
 }
 
 ElevationTilePyramid::View ElevationTilePyramid::bestTileFor(const TileMath::TileKey& key) const

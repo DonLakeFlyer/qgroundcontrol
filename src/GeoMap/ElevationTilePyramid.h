@@ -12,6 +12,9 @@
 #include <QtCore/QHash>
 #include <QtCore/QList>
 #include <QtCore/QRectF>
+#include <QtCore/QSet>
+
+#include <utility>
 
 #include "TileMath.h"
 
@@ -58,8 +61,9 @@ public:
     };
 
     /// Stores \a grid for \a key, replacing any previous tile. Invalid grids
-    /// are rejected (returns false).
-    bool insertTile(const TileMath::TileKey& key, Grid grid);
+    /// are rejected (returns false). When the insert evicts a tile, its key is
+    /// written to \a evictedKey (left untouched otherwise).
+    bool insertTile(const TileMath::TileKey& key, Grid grid, TileMath::TileKey* evictedKey = nullptr);
 
     bool hasTile(const TileMath::TileKey& key) const { return _tiles.contains(key); }
 
@@ -68,6 +72,11 @@ public:
     View bestTileFor(const TileMath::TileKey& key) const;
 
     int tileCount() const { return static_cast<int>(_tiles.count()); }
+
+    /// Tiles that must not be evicted (they back rendered patches or resolve
+    /// them as ancestors). kMaxTiles becomes a soft cap: when every resident
+    /// tile is pinned, inserts grow past it rather than break a rendered mesh.
+    void setPinnedKeys(QSet<TileMath::TileKey> keys) { _pinnedKeys = std::move(keys); }
 
     /// True when any stored tile lies strictly deeper within \a key's extent
     /// (i.e. a lookup inside \a key could resolve finer than \a key itself)
@@ -78,10 +87,11 @@ public:
     qint64 lookupCountForTest() const { return _lookupCount; }
 
 private:
-    void _evictLeastRecentlyUsed();
+    TileMath::TileKey _evictLeastRecentlyUsed();
 
     QHash<TileMath::TileKey, Grid> _tiles;
     QHash<TileMath::TileKey, int> _descendantCounts;  ///< stored tiles strictly below each key
+    QSet<TileMath::TileKey> _pinnedKeys;
     mutable QHash<TileMath::TileKey, qint64> _lastUsed;
     mutable qint64 _useTick = 0;
     mutable qint64 _lookupCount = 0;

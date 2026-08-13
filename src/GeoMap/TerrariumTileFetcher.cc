@@ -228,14 +228,12 @@ bool TerrariumTileFetcher::_startFetch(const TileMath::TileKey& fetchKey)
             return;                                       // all interest cancelled while the lookup was in flight
         }
         if (!tile || tile->img.isEmpty()) {
-            qCDebug(GeoMapTerrariumTileFetcherLog) << "cache returned empty tile for" << fetchKey;
-            _failAll(fetchKey);
+            _failAll(fetchKey, QStringLiteral("cache returned empty tile"));
             return;
         }
         const QImage image = decodeTile(tile->img);
         if (image.isNull()) {
-            qCDebug(GeoMapTerrariumTileFetcherLog) << "cached tile for" << fetchKey << "failed to decode";
-            _failAll(fetchKey);
+            _failAll(fetchKey, QStringLiteral("cached tile failed to decode"));
             return;
         }
         qCDebug(GeoMapTerrariumTileFetcherVerboseLog) << "tile" << fetchKey << "served from cache";
@@ -319,25 +317,21 @@ void TerrariumTileFetcher::_fetchFromNetwork(const TileMath::TileKey& fetchKey)
             return;  // all interest cancelled (abort also lands here)
         }
         if (reply->error() != QNetworkReply::NoError) {
-            qCDebug(GeoMapTerrariumTileFetcherLog)
-                << "network fetch failed for" << fetchKey << reply->error() << reply->errorString() << "httpStatus"
-                << reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
-            _failAll(fetchKey);
+            _failAll(fetchKey, QStringLiteral("network error: %1 (http %2)")
+                                   .arg(reply->errorString())
+                                   .arg(reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt()));
             return;
         }
         const QByteArray data = reply->readAll();
         if (data.isEmpty()) {
-            qCDebug(GeoMapTerrariumTileFetcherLog) << "network fetch for" << fetchKey << "returned empty body";
-            _failAll(fetchKey);
+            _failAll(fetchKey, QStringLiteral("network fetch returned empty body"));
             return;
         }
         // Never cache bodies that delivery would reject (e.g. HTTP-200 error
         // pages): a cached invalid tile would fail every retry from then on
         const QImage image = decodeTile(data);
         if (image.isNull()) {
-            qCDebug(GeoMapTerrariumTileFetcherLog)
-                << "network body for" << fetchKey << "is not a terrarium tile," << data.size() << "bytes";
-            _failAll(fetchKey);
+            _failAll(fetchKey, QStringLiteral("network body is not a terrarium tile, %1 bytes").arg(data.size()));
             return;
         }
         qCDebug(GeoMapTerrariumTileFetcherVerboseLog)
@@ -367,20 +361,34 @@ void TerrariumTileFetcher::_deliverAll(const TileMath::TileKey& fetchKey, const 
     }
 }
 
-void TerrariumTileFetcher::_failAll(const TileMath::TileKey& fetchKey)
+void TerrariumTileFetcher::_failAll(const TileMath::TileKey& fetchKey, const QString& reason)
 {
     // A failed tile inserts nothing: the field keeps its current estimate, and
     // clearing the in-flight key lets a later request retry
     _fieldRequests.remove(fetchKey);
 
     const QList<int> requestIds = _waiters.take(fetchKey);
-    qCDebug(GeoMapTerrariumTileFetcherLog)
-        << "tile" << fetchKey << "failed, failing" << requestIds.count() << "waiters";
+    if (_shouldWarnFailure()) {
+        qCWarning(GeoMapTerrariumTileFetcherLog)
+            << "tile" << fetchKey << "failed:" << reason << "- failing" << requestIds.count() << "waiters";
+    } else {
+        qCDebug(GeoMapTerrariumTileFetcherLog) << "tile" << fetchKey << "failed:" << reason << "- failing"
+                                               << requestIds.count() << "waiters (warning suppressed)";
+    }
     for (int requestId : requestIds) {
         if (_pending.contains(requestId)) {
             _finishFailed(requestId);
         }
     }
+}
+
+bool TerrariumTileFetcher::_shouldWarnFailure()
+{
+    if (_failureWarnTimer.isValid() && (_failureWarnTimer.elapsed() < kFailureWarnIntervalMs)) {
+        return false;
+    }
+    _failureWarnTimer.restart();
+    return true;
 }
 
 void TerrariumTileFetcher::_deliver(int requestId, const QImage& image)

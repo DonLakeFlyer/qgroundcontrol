@@ -1,5 +1,7 @@
 #include "ElevationTilePyramidTest.h"
 
+#include <QtCore/QSet>
+
 #include "ElevationTilePyramid.h"
 
 namespace {
@@ -172,6 +174,59 @@ void ElevationTilePyramidTest::_lruEvictionAtCap()
     QVERIFY(pyramid.insertTile(TileMath::TileKey{200, 0, 8}, makeGrid(2.0f)));
     QCOMPARE(pyramid.tileCount(), ElevationTilePyramid::kMaxTiles);
     QVERIFY(pyramid.hasTile(TileMath::TileKey{2, 0, 8}));
+}
+
+void ElevationTilePyramidTest::_pinnedTilesSurviveEviction()
+{
+    // Pinned tiles back rendered patches (and the ancestors resolving them):
+    // evicting them yanks data out from under a visible mesh, so LRU pressure
+    // must fall on unpinned tiles only — regardless of recency
+    ElevationTilePyramid pyramid;
+    for (int i = 0; i < ElevationTilePyramid::kMaxTiles; i++) {
+        QVERIFY(pyramid.insertTile(TileMath::TileKey{i, 0, 8}, makeGrid(float(i))));
+    }
+
+    // Pin the two least-recently-used tiles
+    pyramid.setPinnedKeys({TileMath::TileKey{0, 0, 8}, TileMath::TileKey{1, 0, 8}});
+
+    QVERIFY(pyramid.insertTile(TileMath::TileKey{200, 0, 8}, makeGrid(1.0f)));
+    QVERIFY(pyramid.insertTile(TileMath::TileKey{201, 0, 8}, makeGrid(1.0f)));
+    QCOMPARE(pyramid.tileCount(), ElevationTilePyramid::kMaxTiles);
+    QVERIFY(pyramid.hasTile(TileMath::TileKey{0, 0, 8}));
+    QVERIFY(pyramid.hasTile(TileMath::TileKey{1, 0, 8}));
+    QVERIFY(!pyramid.hasTile(TileMath::TileKey{2, 0, 8}));
+    QVERIFY(!pyramid.hasTile(TileMath::TileKey{3, 0, 8}));
+
+    // Unpinning makes them ordinary LRU victims again
+    pyramid.setPinnedKeys({});
+    QVERIFY(pyramid.insertTile(TileMath::TileKey{202, 0, 8}, makeGrid(1.0f)));
+    QVERIFY(!pyramid.hasTile(TileMath::TileKey{0, 0, 8}));
+}
+
+void ElevationTilePyramidTest::_allPinnedGrowsPastCap()
+{
+    // kMaxTiles is a soft cap: when every resident tile is pinned, inserts
+    // must still succeed (grow past the cap) rather than break a rendered
+    // patch — the alternative is a cliff
+    ElevationTilePyramid pyramid;
+    QSet<TileMath::TileKey> pinned;
+    for (int i = 0; i < ElevationTilePyramid::kMaxTiles; i++) {
+        const TileMath::TileKey key{i, 0, 8};
+        QVERIFY(pyramid.insertTile(key, makeGrid(1.0f)));
+        pinned.insert(key);
+    }
+    pyramid.setPinnedKeys(pinned);
+
+    QVERIFY(pyramid.insertTile(TileMath::TileKey{200, 0, 8}, makeGrid(1.0f)));
+    QCOMPARE(pyramid.tileCount(), ElevationTilePyramid::kMaxTiles + 1);
+    for (int i = 0; i < ElevationTilePyramid::kMaxTiles; i++) {
+        QVERIFY(pyramid.hasTile(TileMath::TileKey{i, 0, 8}));
+    }
+
+    // Pressure releases once pins clear: the next insert trims back via LRU
+    pyramid.setPinnedKeys({});
+    QVERIFY(pyramid.insertTile(TileMath::TileKey{201, 0, 8}, makeGrid(1.0f)));
+    QCOMPARE_LE(pyramid.tileCount(), ElevationTilePyramid::kMaxTiles + 1);
 }
 
 void ElevationTilePyramidTest::_descendantTracking()

@@ -442,4 +442,30 @@ void PatchGeometryTest::_gridSizeChangeResetsInvalidDeltas()
     QCOMPARE(eastZ(1), eastZ(0) + ((eastZ(2) - eastZ(0)) * 0.5f));  // stitched, not raw 1.0f
 }
 
+void PatchGeometryTest::_edgeLodDeltasListProperty()
+{
+    PatchGeometry viaList;
+    viaList.setGridSize(8);
+    viaList.setHeights(rampHeights(8));
+    QSignalSpy changeSpy(&viaList, &PatchGeometry::edgeLodDeltasChanged);
+
+    // The QML-bindable list form matches the 4-arg setter exactly
+    viaList.setEdgeLodDeltas(QList<int>{0, 1, 0, 1});
+    QCOMPARE(viaList.edgeLodDeltas(), (QList<int>{0, 1, 0, 1}));
+    QCOMPARE(changeSpy.count(), 1);
+
+    PatchGeometry viaArgs;
+    viaArgs.setGridSize(8);
+    viaArgs.setHeights(rampHeights(8));
+    viaArgs.setEdgeLodDeltas(0, 1, 0, 1);
+    QCOMPARE(viaList.vertexData(), viaArgs.vertexData());
+
+    // Wrong-size list is rejected with a warning and changes nothing
+    expectLogMessage("GeoMap.PatchGeometry", QtWarningMsg, QRegularExpression("^setEdgeLodDeltas rejected:"));
+    viaList.setEdgeLodDeltas(QList<int>{1, 1, 1});
+    verifyExpectedLogMessage();
+    QCOMPARE(viaList.edgeLodDeltas(), (QList<int>{0, 1, 0, 1}));
+    QCOMPARE(changeSpy.count(), 1);
+}
+
 UT_REGISTER_TEST(PatchGeometryTest, TestLabel::Unit)

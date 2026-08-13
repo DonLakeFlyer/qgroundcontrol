@@ -13,6 +13,8 @@ private slots:
     void _bilinearBetweenCenters();
     void _clampAtTileEdges();
     void _finestTileWins();
+    void _pinnedTilesSurviveInsertPressure();
+    void _evictionEmitsRegionChanged();
     void _sharedEdgeIdentity();
     void _crossZoomVertexIdentity();
     void _regionChangedOnInsert();

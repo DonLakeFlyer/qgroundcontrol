@@ -47,11 +47,11 @@ bool isBingEmptyTile(int mapId, const QByteArray& data)
 
 }  // namespace
 
-TileImageSource::TileImageSource(const QString& mapType, QObject* parent)
+TileImageSource::TileImageSource(const QString& mapType, QObject* parent, QNetworkAccessManager* networkManager)
     : QObject(parent),
       _mapType(mapType),
       _mapId(UrlFactory::getQtMapIdFromProviderType(mapType)),
-      _networkManager(new QNetworkAccessManager(this))
+      _networkManager(networkManager ? networkManager : new QNetworkAccessManager(this))
 {
     if (_mapId < 0) {
         qCWarning(GeoMapTileImageSourceLog) << "unknown map type" << _mapType << "- all tile requests will fail";
@@ -76,7 +76,7 @@ int TileImageSource::requestTileImage(const TileMath::TileKey& key)
             return;                                       // cancelled while the lookup was in flight
         }
         if (!tile || tile->img.isEmpty()) {
-            qCDebug(GeoMapTileImageSourceLog) << "cache returned empty tile for" << key;
+            _warnFailure(key, QStringLiteral("cache returned empty tile"));
             _finishFailed(requestId);
             return;
         }
@@ -135,24 +135,22 @@ void TileImageSource::_fetchFromNetwork(int requestId, const TileMath::TileKey& 
             return;  // cancelled (abort also lands here)
         }
         if (reply->error() != QNetworkReply::NoError) {
-            qCDebug(GeoMapTileImageSourceLog)
-                << "network fetch failed for" << key << reply->error() << reply->errorString() << "httpStatus"
-                << reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+            _warnFailure(key, QStringLiteral("network error: %1 (http %2)")
+                                  .arg(reply->errorString())
+                                  .arg(reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt()));
             _finishFailed(requestId);
             return;
         }
         const QByteArray data = reply->readAll();
         if (data.isEmpty() || isBingEmptyTile(_mapId, data)) {
-            qCDebug(GeoMapTileImageSourceLog)
-                << "network fetch for" << key
-                << (data.isEmpty() ? "returned empty body" : "returned Bing no-tile placeholder");
+            _warnFailure(key, data.isEmpty() ? QStringLiteral("network fetch returned empty body")
+                                             : QStringLiteral("network fetch returned Bing no-tile placeholder"));
             _finishFailed(requestId);
             return;
         }
         QImage image;
         if (!image.loadFromData(data)) {
-            qCDebug(GeoMapTileImageSourceLog)
-                << "network body for" << key << "failed to decode," << data.size() << "bytes";
+            _warnFailure(key, QStringLiteral("network body failed to decode, %1 bytes").arg(data.size()));
             _finishFailed(requestId);  // never cache undecodable bodies (e.g. HTTP-200 error pages)
             return;
         }
@@ -168,7 +166,7 @@ void TileImageSource::_deliver(int requestId, const TileMath::TileKey& key, cons
 {
     QImage image;
     if (isBingEmptyTile(_mapId, data) || !image.loadFromData(data)) {
-        qCDebug(GeoMapTileImageSourceLog) << "cached tile for" << key << "is unusable (placeholder or decode failure)";
+        _warnFailure(key, QStringLiteral("cached tile is unusable (placeholder or decode failure)"));
         _finishFailed(requestId);
         return;
     }
@@ -186,4 +184,17 @@ void TileImageSource::_finishFailed(int requestId)
 {
     _pending.remove(requestId);
     emit tileImageFailed(requestId);
+}
+
+void TileImageSource::_warnFailure(const TileMath::TileKey& key, const QString& reason)
+{
+    // Fetch failures must be visible without logging configuration (matches
+    // the map tile / terrain query convention), but repeats are throttled so
+    // an outage doesn't flood the log
+    if (!_failureWarnTimer.isValid() || (_failureWarnTimer.elapsed() >= kFailureWarnIntervalMs)) {
+        _failureWarnTimer.restart();
+        qCWarning(GeoMapTileImageSourceLog) << "tile" << key << "failed:" << reason;
+    } else {
+        qCDebug(GeoMapTileImageSourceLog) << "tile" << key << "failed:" << reason << "(warning suppressed)";
+    }
 }

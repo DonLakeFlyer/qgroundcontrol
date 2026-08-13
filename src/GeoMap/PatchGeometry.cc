@@ -90,7 +90,18 @@ void PatchGeometry::setEdgeLodDeltas(int north, int south, int west, int east)
     _lodDeltaSouth = south;
     _lodDeltaWest = west;
     _lodDeltaEast = east;
+    emit edgeLodDeltasChanged();
     _rebuild();
+}
+
+void PatchGeometry::setEdgeLodDeltas(const QList<int>& deltas)
+{
+    if (deltas.count() != 4) {
+        qCWarning(GeoMapPatchGeometryLog)
+            << "setEdgeLodDeltas rejected: expected {N,S,W,E}, got" << deltas.count() << "deltas";
+        return;
+    }
+    setEdgeLodDeltas(deltas[0], deltas[1], deltas[2], deltas[3]);
 }
 
 float PatchGeometry::_rawHeightAt(int row, int col) const

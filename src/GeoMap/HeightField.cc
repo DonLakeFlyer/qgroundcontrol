@@ -51,7 +51,8 @@ bool HeightField::insertTile(const TileMath::TileKey& key, ElevationTilePyramid:
     // Capture before the move: on rejection the grid has been consumed
     const int gridWidth = grid.width;
     const int gridHeight = grid.height;
-    if (!_pyramid.insertTile(key, std::move(grid))) {
+    TileMath::TileKey evicted{0, 0, -1};
+    if (!_pyramid.insertTile(key, std::move(grid), &evicted)) {
         qCWarning(GeoMapHeightFieldLog) << "insertTile rejected: key" << key << "grid" << gridWidth << "x"
                                         << gridHeight;
         return false;
@@ -59,28 +60,39 @@ bool HeightField::insertTile(const TileMath::TileKey& key, ElevationTilePyramid:
     _memoView = ElevationTilePyramid::View{};  // grid pointers die on insert
     qCDebug(GeoMapHeightFieldVerboseLog) << "inserted tile" << key;
 
-    const QPointF corner = TileMath::tileMinCorner(key);
-    const double span = TileMath::tileSpanAtZoom(key.zoom);
-    emit regionChanged(QRectF(corner.x(), corner.y(), span, span));
+    const auto tileExtent = [](const TileMath::TileKey& k) {
+        const QPointF corner = TileMath::tileMinCorner(k);
+        const double span = TileMath::tileSpanAtZoom(k.zoom);
+        return QRectF(corner.x(), corner.y(), span, span);
+    };
+    if (TileMath::isValidKey(evicted)) {
+        qCDebug(GeoMapHeightFieldVerboseLog) << "evicted tile" << evicted;
+        emit regionChanged(tileExtent(evicted));
+    }
+    emit regionChanged(tileExtent(key));
     return true;
 }
 
 double HeightField::heightAt(const QPointF& world) const
 {
-    // Memoized fast path: the last resolved tile answers when the position is
-    // inside it (the memo is only populated when no stored descendant could
-    // override it, and every insert invalidates it). Bounds are half-open
-    // ([minX, maxX) x (minY, maxY]) to match the tile-assignment convention
-    // of TileMath::tileForWorld.
-    if (_memoView.isValid() && (world.x() >= _memoMinX) && (world.x() < _memoMaxX) && (world.y() > _memoMinY) &&
-        (world.y() <= _memoMaxY)) {
-        const double u = (world.x() - _memoMinX) / _memoSpan;
-        const double v = (_memoMaxY - world.y()) / _memoSpan;  // grid origin is the NW corner
-        return heightAtUV(*_memoView.grid, u, v);
+    const TileMath::TileKey query = TileMath::tileForWorld(world, TileMath::kMaxZoom);
+
+    // Memoized fast path: the last resolved tile answers when the position
+    // resolves to it (the memo is only populated when no stored descendant
+    // could override it, and every insert invalidates it). The hit test uses
+    // the same key arithmetic as the full lookup — a world-coordinate bounds
+    // check can disagree with tileForWorld by an ulp exactly on a tile
+    // boundary, silently answering with the wrong neighbor's data there.
+    if (_memoView.isValid()) {
+        const int shift = TileMath::kMaxZoom - _memoView.key.zoom;
+        if (((query.x >> shift) == _memoView.key.x) && ((query.y >> shift) == _memoView.key.y)) {
+            const double u = (world.x() - _memoMinX) / _memoSpan;
+            const double v = (_memoMaxY - world.y()) / _memoSpan;  // grid origin is the NW corner
+            return heightAtUV(*_memoView.grid, u, v);
+        }
     }
 
-    // Query at the deepest zoom; the pyramid resolves the finest stored cover
-    const TileMath::TileKey query = TileMath::tileForWorld(world, TileMath::kMaxZoom);
+    // The pyramid resolves the finest stored cover of the deepest-zoom query
     const ElevationTilePyramid::View view = _pyramid.bestTileFor(query);
     if (!view.isValid()) {
         return 0.0;
@@ -93,8 +105,6 @@ double HeightField::heightAt(const QPointF& world) const
         // every position within its bounds until the next insert
         _memoView = view;
         _memoMinX = corner.x();
-        _memoMaxX = corner.x() + span;
-        _memoMinY = corner.y();
         _memoMaxY = corner.y() + span;
         _memoSpan = span;
     }
@@ -111,14 +121,22 @@ QList<float> HeightField::samplePatch(const TileMath::TileKey& key, int gridSize
         return QList<float>();
     }
 
-    const QPointF corner = TileMath::tileMinCorner(key);
-    const double span = TileMath::tileSpanAtZoom(key.zoom);
+    // Vertex positions are computed from global dyadic fractions
+    // (key*gridSize + index over tileCount*gridSize) instead of
+    // corner + offset sums: coincident vertices of neighboring patches — even
+    // across zoom levels — then produce bit-identical coordinates, so the
+    // half-open tile assignment in heightAt resolves both sides to the same
+    // data. An ulp of difference on a tile boundary flips which tile answers,
+    // stepping a rendered edge by the full fine/coarse data difference.
+    const double world = TileMath::worldSize();
+    const double half = world / 2.0;
+    const double denominator = static_cast<double>(qint64(1) << key.zoom) * gridSize;
     QList<float> heights;
     heights.reserve(qsizetype(gridSize + 1) * (gridSize + 1));
     for (int row = 0; row <= gridSize; row++) {
-        const double y = corner.y() + (span * (gridSize - row) / gridSize);
+        const double y = half - (world * (((qint64(key.y) * gridSize) + row) / denominator));
         for (int col = 0; col <= gridSize; col++) {
-            const double x = corner.x() + (span * col / gridSize);
+            const double x = -half + (world * (((qint64(key.x) * gridSize) + col) / denominator));
             heights.append(static_cast<float>(heightAt(QPointF(x, y))));
         }
     }

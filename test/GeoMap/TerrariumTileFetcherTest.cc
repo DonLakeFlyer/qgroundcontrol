@@ -330,11 +330,16 @@ void TerrariumTileFetcherTest::_networkErrorFails()
     UnitTestTileGenerator::setForcedMissCount(1);
     const auto guard = qScopeGuard([] { UnitTestTileGenerator::setForcedMissCount(0); });
 
+    // Fetch failures must be visible without logging configuration (matches
+    // the map tile / Copernicus convention); repeats are throttled
+    expectLogMessage("GeoMap.TerrariumTileFetcher", QtWarningMsg, QRegularExpression(QStringLiteral("failed")));
+
     const int requestId = source.requestPatchHeights(keyOver(flat10Region().center(), zoom), kGridSize);
     QTRY_COMPARE_WITH_TIMEOUT(failedSpy.count(), 1, TestTimeout::mediumMs());
     QCOMPARE(failedSpy.first().at(0).toInt(), requestId);
     QCOMPARE(nam.requestCount, 1);
     QVERIFY(readySpy.isEmpty());
+    verifyExpectedLogMessage();
 }
 
 void TerrariumTileFetcherTest::_networkGarbageBodyFailsAndNotCached()
@@ -353,6 +358,7 @@ void TerrariumTileFetcherTest::_networkGarbageBodyFailsAndNotCached()
     UnitTestTileGenerator::setForcedMissCount(2);
     const auto guard = qScopeGuard([] { UnitTestTileGenerator::setForcedMissCount(0); });
 
+    ignoreLogMessage("GeoMap.TerrariumTileFetcher", QtWarningMsg, QRegularExpression(QStringLiteral("failed")));
     source.requestPatchHeights(key, kGridSize);
     QTRY_COMPARE_WITH_TIMEOUT(failedSpy.count(), 1, TestTimeout::mediumMs());
     QCOMPARE(nam.requestCount, 1);
@@ -387,6 +393,7 @@ void TerrariumTileFetcherTest::_networkWrongSizeImageFailsAndNotCached()
     UnitTestTileGenerator::setForcedMissCount(2);
     const auto guard = qScopeGuard([] { UnitTestTileGenerator::setForcedMissCount(0); });
 
+    ignoreLogMessage("GeoMap.TerrariumTileFetcher", QtWarningMsg, QRegularExpression(QStringLiteral("failed")));
     source.requestPatchHeights(key, kGridSize);
     QTRY_COMPARE_WITH_TIMEOUT(failedSpy.count(), 1, TestTimeout::mediumMs());
     QCOMPARE(nam.requestCount, 1);
@@ -618,6 +625,7 @@ void TerrariumTileFetcherTest::_tileFetchFailureLeavesFieldIntact()
     UnitTestTileGenerator::setForcedMissCount(2);
     const auto guard = qScopeGuard([] { UnitTestTileGenerator::setForcedMissCount(0); });
 
+    ignoreLogMessage("GeoMap.TerrariumTileFetcher", QtWarningMsg, QRegularExpression(QStringLiteral("failed")));
     QVERIFY(source.requestTile(key));
     QTRY_COMPARE_WITH_TIMEOUT(nam.requestCount, 1, TestTimeout::mediumMs());
     QVERIFY_NO_SIGNAL_WAIT(regionSpy, TestTimeout::shortMs());

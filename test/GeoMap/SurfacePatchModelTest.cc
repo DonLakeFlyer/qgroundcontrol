@@ -181,23 +181,24 @@ void SurfacePatchModelTest::_debugHillsSwitchResets()
     model.drainUpdates();
     QCOMPARE_GT(resetSpy.count(), 0);
     QCOMPARE_GT(model.rowCount(), 0);
-    QTRY_COMPARE_WITH_TIMEOUT(model.pendingCount(), 0, 5000);
 
-    // Debug hills deliver non-flat heights
-    bool nonZeroSeen = false;
-    for (int row = 0; (row < model.rowCount()) && !nonZeroSeen; row++) {
-        const auto heights = model.data(model.index(row), SurfacePatchModel::HeightsRole).value<QList<float>>();
-        for (float h : heights) {
-            if (h > 0.0f) {
-                nonZeroSeen = true;
-                break;
+    // Debug hills deliver non-flat heights once the synthesized tiles land in
+    // the field (delivered via the event loop)
+    const auto nonZeroSeen = [&model]() {
+        for (int row = 0; row < model.rowCount(); row++) {
+            const auto heights = model.data(model.index(row), SurfacePatchModel::HeightsRole).value<QList<float>>();
+            for (float h : heights) {
+                if (h > 0.0f) {
+                    return true;
+                }
             }
         }
-    }
-    QVERIFY(nonZeroSeen);
+        return false;
+    };
+    QTRY_VERIFY_WITH_TIMEOUT(nonZeroSeen(), 5000);
 }
 
-void SurfacePatchModelTest::_pendingRowsCoveredDuringLodChurn()
+void SurfacePatchModelTest::_rowsAlwaysMeshedDuringLodChurn()
 {
     GeoMapCamera camera;
     GeoScene scene;
@@ -205,29 +206,62 @@ void SurfacePatchModelTest::_pendingRowsCoveredDuringLodChurn()
     camera.setViewportSize(kViewport);
     camera.lookAt(kCenter, 0, 0, GeoMapCamera::kMaxDistance);
     attach(model, scene, camera);
-    QTRY_COMPARE_WITH_TIMEOUT(model.pendingCount(), 0, 5000);
 
-    // Refine: pending replacements report covered so the delegate hides their
-    // empty flat mesh instead of z-fighting the retained retiring cover
+    // Refine hard: every row must present a full mesh from the field's
+    // estimate - the delegate never sees a pending/hidden row. (Per-pass
+    // coverage during churn is guarded at the SurfaceModel level.)
     camera.lookAt(kCenter, 0, 0, 2000);
     model.drainUpdates();
-    QCOMPARE_GT(model.pendingCount(), 0);
-    int coveredRows = 0;
+    QCOMPARE_GT(model.rowCount(), 0);
     for (int row = 0; row < model.rowCount(); row++) {
         const QModelIndex idx = model.index(row);
-        const bool ready = model.data(idx, SurfacePatchModel::ReadyRole).toBool();
-        const bool covered = model.data(idx, SurfacePatchModel::CoveredRole).toBool();
-        QCOMPARE(covered, !ready);
-        if (covered) {
-            coveredRows++;
+        QVERIFY(model.data(idx, SurfacePatchModel::ReadyRole).toBool());
+        QVERIFY(!model.data(idx, SurfacePatchModel::CoveredRole).toBool());
+        const auto heights = model.data(idx, SurfacePatchModel::HeightsRole).value<QList<float>>();
+        QCOMPARE(heights.count(), (SurfaceModel::kGridSize + 1) * (SurfaceModel::kGridSize + 1));
+    }
+}
+
+void SurfacePatchModelTest::_edgeLodDeltasRoleStitchesLodRings()
+{
+    GeoMapCamera camera;
+    GeoScene scene;
+    SurfacePatchModel model;
+    camera.setViewportSize(kViewport);
+    // Tilted view: LOD rings guarantee coarser neighbors across ring boundaries
+    camera.lookAt(kCenter, 0, 45, 2000);
+    attach(model, scene, camera);
+    QCOMPARE_GT(model.rowCount(), 8);
+
+    QVERIFY(model.roleNames().value(SurfacePatchModel::EdgeLodDeltasRole) == QByteArray("edgeLodDeltas"));
+
+    // Every row exposes {N,S,W,E}; the mixed-LOD view must exercise stitching
+    int positiveDeltas = 0;
+    for (int row = 0; row < model.rowCount(); row++) {
+        const auto deltas = model.data(model.index(row), SurfacePatchModel::EdgeLodDeltasRole).value<QList<int>>();
+        QCOMPARE(deltas.count(), 4);
+        for (const int delta : deltas) {
+            QCOMPARE_GE(delta, 0);
+            if (delta > 0) {
+                positiveDeltas++;
+            }
         }
     }
-    QCOMPARE_GT(coveredRows, 0);
+    QCOMPARE_GT(positiveDeltas, 0);
 
-    QTRY_COMPARE_WITH_TIMEOUT(model.pendingCount(), 0, 5000);
-    for (int row = 0; row < model.rowCount(); row++) {
-        QVERIFY(!model.data(model.index(row), SurfacePatchModel::CoveredRole).toBool());
+    // Neighbor churn refreshes the role so delegates re-stitch
+    QSignalSpy dataSpy(&model, &QAbstractItemModel::dataChanged);
+    camera.lookAt(kCenter, 0, 45, 1000);
+    model.drainUpdates();
+    bool deltasRefreshed = false;
+    for (const QList<QVariant>& args : dataSpy) {
+        const auto roles = args.at(2).value<QList<int>>();
+        if (roles.contains(SurfacePatchModel::EdgeLodDeltasRole)) {
+            deltasRefreshed = true;
+            break;
+        }
     }
+    QVERIFY2(deltasRefreshed, "no dataChanged carried EdgeLodDeltasRole during LOD churn");
 }
 
 UT_REGISTER_TEST_LIGHTWEIGHT(SurfacePatchModelTest, TestLabel::Unit)

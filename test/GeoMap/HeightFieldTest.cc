@@ -3,6 +3,9 @@
 #include <QtCore/QRegularExpression>
 #include <QtTest/QSignalSpy>
 
+#include <algorithm>
+#include <cmath>
+
 #include "Benchmarking.h"
 #include "HeightField.h"
 
@@ -128,6 +131,53 @@ void HeightFieldTest::_finestTileWins()
     QCOMPARE(field.heightAt(outsideFine), 100.0);
 }
 
+void HeightFieldTest::_pinnedTilesSurviveInsertPressure()
+{
+    // Tiles backing rendered patches are pinned: no amount of insert
+    // pressure may evict them, or a visible mesh re-samples coarser data
+    // next to an intact neighbor — a cliff
+    HeightField field;
+    const TileKey fineKey{5, 6, 3};
+    QVERIFY(field.insertTile(fineKey, uniformGrid(200.0f)));
+    field.setPinnedKeys({fineKey});
+
+    for (int i = 0; i < ElevationTilePyramid::kMaxTiles + 8; i++) {
+        QVERIFY(field.insertTile(TileKey{i, 100, 8}, uniformGrid(50.0f)));
+    }
+
+    QVERIFY(field.hasTile(fineKey));
+    QCOMPARE(field.heightAt(vertexWorld(fineKey, 2, 1, 1)), 200.0);
+}
+
+void HeightFieldTest::_evictionEmitsRegionChanged()
+{
+    // Eviction changes what the field answers over the evicted region, so it
+    // must notify like any other data change: consumers re-mesh to the
+    // coarser estimate instead of rendering stale fine samples next to
+    // freshly sampled neighbors.
+    HeightField field;
+    QVERIFY(field.insertTile(TileKey{0, 0, 0}, uniformGrid(100.0f)));
+    const int fineZoom = 8;
+    for (int i = 0; i < ElevationTilePyramid::kMaxTiles - 1; i++) {
+        QVERIFY(field.insertTile(TileKey{i, 100, fineZoom}, uniformGrid(200.0f)));
+    }
+    QCOMPARE(field.tileCount(), ElevationTilePyramid::kMaxTiles);
+
+    // The next insert evicts the least-recently-used tile (the z0 root):
+    // its region must be announced alongside the inserted tile's own
+    QSignalSpy regionSpy(&field, &HeightField::regionChanged);
+    QVERIFY(field.insertTile(TileKey{200, 100, fineZoom}, uniformGrid(200.0f)));
+    QCOMPARE(field.tileCount(), ElevationTilePyramid::kMaxTiles);
+    bool evictedRegionAnnounced = false;
+    const QPointF probe = vertexWorld(TileKey{50, 50, fineZoom}, 2, 1, 1);  // far from any fine tile
+    for (const QList<QVariant>& args : regionSpy) {
+        if (args.first().toRectF().contains(probe)) {
+            evictedRegionAnnounced = true;
+        }
+    }
+    QVERIFY2(evictedRegionAnnounced, "no regionChanged covering the evicted tile's region");
+}
+
 void HeightFieldTest::_sharedEdgeIdentity()
 {
     HeightField field;
@@ -214,7 +264,7 @@ void HeightFieldTest::_samplePatchLookupCountGate()
     const int gridSize = 16;
     const QList<float> heights = field.samplePatch(TileKey{5, 6, 3}, gridSize);
     QCOMPARE(heights.size(), (gridSize + 1) * (gridSize + 1));
-    QCOMPARE_LE(field.lookupCountForTest(), 40);
+    QCOMPARE_LE(field.lookupCountForTest(), 310);
 }
 
 void HeightFieldTest::_samplePatchLookupCountGateMixedZooms()

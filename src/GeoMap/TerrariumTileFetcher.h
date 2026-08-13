@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include <QtCore/QElapsedTimer>
 #include <QtCore/QHash>
 #include <QtCore/QRectF>
 #include <QtCore/QSet>
@@ -53,14 +54,11 @@ public:
     int requestPatchHeights(const TileMath::TileKey& key, int gridSize) final;
     void cancelRequest(int requestId) final;
 
-    /// Field that receives whole decoded tiles requested via requestTile (not owned)
-    void setHeightField(HeightField* field) { _heightField = field; }
-
     /// Ensures the attached field holds this tile (clamped to the z15 ancestor
     /// above kMaxTileZoom). Returns false when no field is attached, the key is
     /// invalid, or the fetch could not start; true when the tile is already
     /// held, already in flight, or a fetch was started.
-    bool requestTile(const TileMath::TileKey& key);
+    bool requestTile(const TileMath::TileKey& key) override;
 
     int pendingCount() const { return _pending.count(); }
 
@@ -81,16 +79,19 @@ private:
     bool _startFetch(const TileMath::TileKey& fetchKey);
     void _fetchFromNetwork(const TileMath::TileKey& fetchKey);
     void _deliverAll(const TileMath::TileKey& fetchKey, const QImage& image);
-    void _failAll(const TileMath::TileKey& fetchKey);
+    void _failAll(const TileMath::TileKey& fetchKey, const QString& reason);
     void _deliver(int requestId, const QImage& image);
     void _finishFailed(int requestId);
+    bool _shouldWarnFailure();
+
+    static constexpr int kFailureWarnIntervalMs = 10000;  ///< throttle for fetch-failure warnings
 
     QNetworkAccessManager* _networkManager = nullptr;
     const int _mapId;
-    HeightField* _heightField = nullptr;
     QHash<int, PendingRequest> _pending;
     QHash<TileMath::TileKey, QList<int>> _waiters;            ///< request ids sharing the in-flight fetch of a tile
     QSet<TileMath::TileKey> _fieldRequests;                   ///< tiles awaiting delivery into the field
     QHash<TileMath::TileKey, QNetworkReply*> _activeReplies;  ///< in-flight network fetches by tile
     TileMath::TileKey _lastFetchKey;
+    QElapsedTimer _failureWarnTimer;                          ///< restarted on each emitted failure warning
 };

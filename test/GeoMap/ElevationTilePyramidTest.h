@@ -17,5 +17,7 @@ private slots:
     void _subWindowDeepZoom();
     void _insertReplacesTile();
     void _lruEvictionAtCap();
+    void _pinnedTilesSurviveEviction();
+    void _allPinnedGrowsPastCap();
     void _descendantTracking();
 };
