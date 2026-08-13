@@ -13,6 +13,7 @@
 #include <QtCore/QObject>
 #include <QtCore/QPointF>
 #include <QtCore/QRectF>
+#include <QtQmlIntegration/QtQmlIntegration>
 
 #include "ElevationTilePyramid.h"
 #include "TileMath.h"
@@ -33,6 +34,8 @@
 class HeightField : public QObject
 {
     Q_OBJECT
+    // Passed through QML as an opaque pointer (PatchGeometry.heightField)
+    QML_ANONYMOUS
 
 public:
     explicit HeightField(QObject* parent = nullptr);
@@ -62,6 +65,14 @@ public:
 
     /// True when the backing pyramid holds this exact tile
     bool hasTile(const TileMath::TileKey& key) const { return _pyramid.hasTile(key); }
+
+    /// Stored tile that backs samples for \a key (the tile itself when
+    /// present, else its nearest stored ancestor); invalid when nothing covers it
+    TileMath::TileKey backingKeyFor(const TileMath::TileKey& key) const
+    {
+        const ElevationTilePyramid::View view = _pyramid.bestTileFor(key);
+        return view.isValid() ? view.key : TileMath::TileKey{0, 0, -1};
+    }
 
     /// Perf instrumentation: pyramid resolutions performed so far (memoized
     /// sampling keeps this far below one per sampled vertex). Test hook, not

@@ -24,6 +24,8 @@ private slots:
     void _stitchAtWorldEdgeFallsBack();
     void _stitchAppliesToAllFourEdges();
     void _stitchInvalidDeltaWarns();
+    void _declarativeFieldKeyStitchesLikeSampleFromField();
+    void _coarseEdgeRefreshesWhenNeighborTileArrives();
     void _gridSizeChangeResetsInvalidDeltas();
     void _edgeLodDeltasListProperty();
 };

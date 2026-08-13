@@ -1,5 +1,6 @@
 #include "PatchGeometry.h"
 
+#include <QtCore/QMarginsF>
 #include <QtGui/QVector3D>
 
 #include <algorithm>
@@ -14,6 +15,19 @@ QGC_LOGGING_CATEGORY(GeoMapPatchGeometryLog, "GeoMap.PatchGeometry")
 PatchGeometry::PatchGeometry(QQuick3DObject* parent) : QQuick3DGeometry(parent)
 {
     _rebuild();
+}
+
+void PatchGeometry::componentComplete()
+{
+    QQuick3DGeometry::componentComplete();
+    _rebuild();  // one build for the whole batch of initial property assignments
+}
+
+void PatchGeometry::_requestRebuild()
+{
+    if (isComponentComplete()) {
+        _rebuild();
+    }
 }
 
 void PatchGeometry::setGridSize(int gridSize)
@@ -32,7 +46,7 @@ void PatchGeometry::setGridSize(int gridSize)
         }
     }
     emit gridSizeChanged();
-    _rebuild();
+    _requestRebuild();
 }
 
 void PatchGeometry::setSpan(qreal span)
@@ -42,7 +56,7 @@ void PatchGeometry::setSpan(qreal span)
     }
     _span = span;
     emit spanChanged();
-    _rebuild();
+    _requestRebuild();
 }
 
 void PatchGeometry::setHeights(const QList<float>& heights)
@@ -52,7 +66,7 @@ void PatchGeometry::setHeights(const QList<float>& heights)
     }
     _heights = heights;
     emit heightsChanged();
-    _rebuild();
+    _requestRebuild();
 }
 
 bool PatchGeometry::sampleFromField(const TileMath::TileKey& key)
@@ -67,9 +81,91 @@ bool PatchGeometry::sampleFromField(const TileMath::TileKey& key)
             << "sampleFromField rejected: field returned no samples, key" << key << "gridSize" << _gridSize;
         return false;
     }
-    _key = key;
-    setHeights(sampled);
+    if (key != _key) {
+        _key = key;
+        emit tileKeyChanged();
+    }
+    if (sampled != _heights) {
+        _heights = sampled;
+        emit heightsChanged();
+    }
+    _rebuild();
     return true;
+}
+
+void PatchGeometry::setHeightField(HeightField* heightField)
+{
+    if (heightField == _heightField) {
+        return;
+    }
+    if (_heightField) {
+        disconnect(_heightField, nullptr, this, nullptr);
+    }
+    _heightField = heightField;
+    if (_heightField) {
+        connect(_heightField, &HeightField::regionChanged, this, &PatchGeometry::_fieldRegionChanged);
+        // Match setHeightField(nullptr) semantics; null first, the dying
+        // object needs no disconnect
+        connect(_heightField, &QObject::destroyed, this, [this] {
+            _heightField = nullptr;
+            emit heightFieldChanged();
+            _requestRebuild();
+        });
+    }
+    emit heightFieldChanged();
+    _requestRebuild();
+}
+
+void PatchGeometry::setTileX(int tileX)
+{
+    if (tileX == _key.x) {
+        return;
+    }
+    _key.x = tileX;
+    emit tileKeyChanged();
+    _requestRebuild();
+}
+
+void PatchGeometry::setTileY(int tileY)
+{
+    if (tileY == _key.y) {
+        return;
+    }
+    _key.y = tileY;
+    emit tileKeyChanged();
+    _requestRebuild();
+}
+
+void PatchGeometry::setTileZoom(int tileZoom)
+{
+    if (tileZoom == _key.zoom) {
+        return;
+    }
+    _key.zoom = tileZoom;
+    emit tileKeyChanged();
+    _requestRebuild();
+}
+
+void PatchGeometry::_fieldRegionChanged(const QRectF& worldRect)
+{
+    // Only constrained edges are field-resolved (interior heights arrive
+    // through the heights property), so a rebuild is needed only when a
+    // coarser neighbor's data could have changed: the changed region touches
+    // this patch's tile rect. Inflate for edge-only contact — adjacent tiles
+    // share only the boundary line, which QRectF::intersects misses.
+    if (std::all_of(_lodDelta.cbegin(), _lodDelta.cend(), [](int delta) { return delta == 0; })) {
+        return;
+    }
+    if (!TileMath::isValidKey(_key)) {
+        return;
+    }
+    const double span = TileMath::tileSpanAtZoom(_key.zoom);
+    const QRectF rect(TileMath::tileMinCorner(_key), QSizeF(span, span));
+    const double margin = rect.width() * 1e-6;
+    if (!rect.marginsAdded(QMarginsF(margin, margin, margin, margin)).intersects(worldRect)) {
+        return;
+    }
+    _requestRebuild();
 }
 
 void PatchGeometry::setEdgeLodDeltas(int north, int south, int west, int east)
@@ -93,7 +189,7 @@ void PatchGeometry::setEdgeLodDeltas(int north, int south, int west, int east)
     _lodDelta[kWest] = west;
     _lodDelta[kEast] = east;
     emit edgeLodDeltasChanged();
-    _rebuild();
+    _requestRebuild();
 }
 
 void PatchGeometry::setEdgeLodDeltas(const QList<int>& deltas)

@@ -22,6 +22,7 @@ private slots:
     void _samplePatchLookupCountGate();
     void _samplePatchLookupCountGateMixedZooms();
     void _samplePatchSingleLookupPerPatch();
+    void _backingKeyFor();
     void _memoInvalidatedOnInsert();
     void _samplePatchBenchmark();
 };

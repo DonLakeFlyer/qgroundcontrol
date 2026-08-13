@@ -1,6 +1,9 @@
 #include "SurfaceModelTest.h"
 
+#include <QtCore/QByteArray>
 #include <QtCore/QCoreApplication>
+#include <QtCore/QHash>
+#include <QtCore/QLatin1StringView>
 #include <QtCore/QSet>
 #include <QtTest/QSignalSpy>
 
@@ -12,6 +15,7 @@
 #include "GeoMapCamera.h"
 #include "HeightField.h"
 #include "HeightSource.h"
+#include "PatchGeometry.h"
 #include "SurfaceModel.h"
 #include "TileMath.h"
 
@@ -68,6 +72,14 @@ class RoughHeightSource : public ProceduralHeightSource
 public:
     using ProceduralHeightSource::ProceduralHeightSource;
 
+    /// Lipschitz bound on the octave sum: |∂f/∂x| ≤ Σ amplitude/xScale =
+    /// 300/20000 + 150/1900 + 80/280 + 40/61 ≈ 1.04, |∂f/∂y| ≈ 1.01,
+    /// |∇f| ≤ √(1.04² + 1.01²) < 1.45
+    static constexpr double kMaxGradient = 1.45;
+
+    /// Total possible height swing: 2 × Σ octave amplitudes
+    static constexpr double kHeightRange = 2.0 * (300.0 + 150.0 + 80.0 + 40.0);
+
 protected:
     float heightAtWorld(const QPointF& world) const override
     {
@@ -80,39 +92,35 @@ protected:
     }
 };
 
-/// Rendered height along a patch edge at fractional grid coordinate t,
-/// replicating PatchGeometry: edge vertices with a coarser neighbor are
-/// constrained to the lerp of the nearest coincident samples, and the mesh
-/// interpolates linearly between vertices. edge is 'N','S','W','E'.
-double renderedEdgeHeight(const QList<float>& heights, const QList<int>& deltas, QChar edge, double t)
+constexpr int kFloatsPerVertex = 8;  // position 3, normal 3, uv 2
+
+/// z of grid vertex (row, col) in a built PatchGeometry mesh (grid vertices
+/// precede skirt vertices, row-major from the north-west corner)
+double meshZ(const QByteArray& vertexData, int row, int col)
+{
+    const int vpe = SurfaceModel::kGridSize + 1;
+    const float* vertex =
+        reinterpret_cast<const float*>(vertexData.constData()) + (qsizetype((row * vpe) + col) * kFloatsPerVertex);
+    return double(vertex[2]);
+}
+
+/// Rendered height along a mesh edge at fractional grid coordinate t: the
+/// mesh interpolates linearly between adjacent edge vertices. edge is
+/// 'N','S','W','E'.
+double meshEdgeHeight(const QByteArray& vertexData, QChar edge, double t)
 {
     constexpr int kGrid = SurfaceModel::kGridSize;
-    const int vpe = kGrid + 1;
-    const auto raw = [&](int idx) {
+    const auto vertex = [&](int idx) {
         switch (edge.unicode()) {
             case u'N':
-                return double(heights.at(idx));
+                return meshZ(vertexData, 0, idx);
             case u'S':
-                return double(heights.at((kGrid * vpe) + idx));
+                return meshZ(vertexData, kGrid, idx);
             case u'W':
-                return double(heights.at(idx * vpe));
+                return meshZ(vertexData, idx, 0);
             default:
-                return double(heights.at((idx * vpe) + kGrid));
+                return meshZ(vertexData, idx, kGrid);
         }
-    };
-    const int deltaIndex = QStringLiteral("NSWE").indexOf(edge);
-    const int delta = deltas.at(deltaIndex);
-    const auto vertex = [&](int idx) {
-        if (delta > 0) {
-            const int step = 1 << delta;
-            const int base = (idx / step) * step;
-            if ((idx != base) && ((kGrid % step) == 0)) {
-                const double a = raw(base);
-                const double b = raw(base + step);
-                return a + ((b - a) * (double(idx - base) / step));
-            }
-        }
-        return raw(idx);
     };
     t = std::clamp(t, 0.0, double(kGrid));
     const int i0 = std::min(int(std::floor(t)), kGrid - 1);
@@ -120,29 +128,13 @@ double renderedEdgeHeight(const QList<float>& heights, const QList<int>& deltas,
     return (vertex(i0) * (1.0 - frac)) + (vertex(i0 + 1) * frac);
 }
 
-/// Largest rendered height mismatch along the shared boundary segment of two
-/// edge-adjacent patches (0 when they don't share one). edgeOfA identifies
-/// which edge of A faces B.
-double sharedEdgeMaxStep(const SurfaceModel& model, const SurfaceModel::Patch& a, const SurfaceModel::Patch& b,
-                         QChar edgeOfA)
+/// Largest rendered mismatch between two patch meshes along the world
+/// interval [lo, hi] of their shared edge line (horizontal: runs east-west)
+double segmentMaxStep(const QByteArray& meshA, QChar edgeA, const QRectF& rectA, const QByteArray& meshB, QChar edgeB,
+                      const QRectF& rectB, bool horizontal, double lo, double hi)
 {
-    const QRectF rectA = tileRect(a.key);
-    const QRectF rectB = tileRect(b.key);
-    const bool horizontal = (edgeOfA == u'N') || (edgeOfA == u'S');  // shared segment runs east-west
-
-    // Overlap of the two rects along the edge direction
-    const double lo = horizontal ? std::max(rectA.left(), rectB.left()) : std::max(rectA.top(), rectB.top());
-    const double hi = horizontal ? std::min(rectA.right(), rectB.right()) : std::min(rectA.bottom(), rectB.bottom());
-    if (hi <= lo) {
-        return 0.0;
-    }
-
-    const QList<int> deltasA = model.edgeLodDeltas(a.key);
-    const QList<int> deltasB = model.edgeLodDeltas(b.key);
-    const QChar edgeOfB = (edgeOfA == u'N') ? u'S' : (edgeOfA == u'S') ? u'N' : (edgeOfA == u'W') ? u'E' : u'W';
-
-    constexpr int kSamples = 65;  // denser than any vertex spacing involved
     constexpr int kGrid = SurfaceModel::kGridSize;
+    constexpr int kSamples = 65;  // denser than any vertex spacing involved
     double maxStep = 0.0;
     for (int i = 0; i <= kSamples; i++) {
         const double pos = lo + ((hi - lo) * i / kSamples);
@@ -153,9 +145,7 @@ double sharedEdgeMaxStep(const SurfaceModel& model, const SurfaceModel::Patch& a
                                      : ((rectA.bottom() - pos) / rectA.height()) * kGrid;
         const double tB = horizontal ? ((pos - rectB.left()) / rectB.width()) * kGrid
                                      : ((rectB.bottom() - pos) / rectB.height()) * kGrid;
-        const double hA = renderedEdgeHeight(a.heights, deltasA, edgeOfA, tA);
-        const double hB = renderedEdgeHeight(b.heights, deltasB, edgeOfB, tB);
-        maxStep = std::max(maxStep, std::abs(hA - hB));
+        maxStep = std::max(maxStep, std::abs(meshEdgeHeight(meshA, edgeA, tA) - meshEdgeHeight(meshB, edgeB, tB)));
     }
     return maxStep;
 }
@@ -597,19 +587,43 @@ void SurfaceModelTest::_coverageMaintainedDuringLodChurn()
     QVERIFY(model.updateSettled());
 }
 
-void SurfaceModelTest::_renderedEdgesContinuousAcrossLodBoundaries()
+void SurfaceModelTest::_renderedEdgeContractAcrossLodBoundaries()
 {
-    // Field report: with real terrain relief, walls ("cliffs") appear along
-    // patch boundaries at oblique horizon views. The rendered surface must be
-    // C0 continuous across every shared patch edge: coincident samples of the
-    // same field plus the PatchGeometry stitch constraint guarantee it for
-    // every LOD delta the renderer supports.
+    // Cesium-style layered edge contract (DESIGN-cesium-style-sampling.md §5),
+    // replacing the retired 0.5 m C0-exactness assertion, which promised more
+    // than sample-center tiles can deliver. Across every shared patch edge of
+    // the real rendered meshes:
+    // (a) neighbors resolved from the same backing tile match bit-exactly;
+    // (T) a stitched fine edge lies on its coarse neighbor's rendered
+    //     polyline to float-lerp precision;
+    // (b) same-level neighbors backed by different tiles mismatch at most by
+    //     the source's variation over each side's sampling reach — the
+    //     residual that skirts hide (contract (c), the skirt sizing step).
+    // Corner vertices can be captured by a perpendicular edge's constraint
+    // (N,S,W,E precedence, see PatchGeometry::_heightAt), pulling the
+    // outermost mesh segment off this neighbor's polyline; skirts hide those
+    // corner nicks, so (a)/(T) apply to the segment interior (one coarse
+    // render cell in from each end) and the full segment gets the (b) bound.
     GeoMapCamera camera;
     RoughHeightSource source;
     HeightField field;
     source.setHeightField(&field);
     SurfaceModel model(&camera, &source, &field);
     camera.setViewportSize(kViewport);
+
+    // Per-side sampling reach of a rendered edge value around its query
+    // point: one render cell (mesh/constraint lerp span) plus 1.5 backing
+    // texels (bilinear support + the half-texel border clamp of
+    // sample-center grids); the source varies by at most kMaxGradient·reach
+    const auto reach = [](int renderZoom, int backingZoom) {
+        return (TileMath::tileSpanAtZoom(renderZoom) / SurfaceModel::kGridSize) +
+               (1.5 * TileMath::tileSpanAtZoom(backingZoom) / ProceduralHeightSource::kSynthGridSize);
+    };
+    const auto stepBound = [&reach](int renderZoomA, int backingZoomA, int renderZoomB, int backingZoomB) {
+        return std::min(
+            RoughHeightSource::kMaxGradient * (reach(renderZoomA, backingZoomA) + reach(renderZoomB, backingZoomB)),
+            RoughHeightSource::kHeightRange);
+    };
 
     // Oblique poses with a far horizon maximize the LOD spread across the
     // resident set (the screenshot pose family)
@@ -618,8 +632,10 @@ void SurfaceModelTest::_renderedEdgesContinuousAcrossLodBoundaries()
         qreal tilt;
         qreal distance;
     };
+
     const QList<Pose> poses = {{80, 3000}, {GeoMapCamera::kMaxTilt, 15000}};
 
+    int stitchedPairs = 0;  // (T) pairs seen: proves the stitch contract ran
     for (const Pose& pose : poses) {
         camera.lookAt(kCenter, 0, pose.tilt, pose.distance);
 
@@ -638,15 +654,23 @@ void SurfaceModelTest::_renderedEdgesContinuousAcrossLodBoundaries()
         const QList<SurfaceModel::Patch> patches = model.patches();
         QCOMPARE_GT(patches.count(), 8);
 
-        // Every edge-adjacent pair must render the same heights along the
-        // shared boundary segment
-        struct EdgeSpec
-        {
-            QChar edge;  // A's edge facing B
-        };
-        const QList<EdgeSpec> edges = {{u'N'}, {u'S'}, {u'W'}, {u'E'}};
-        double worstStep = 0.0;
-        QString worst;
+        // Build each patch's real rendered mesh exactly as GeoMap.qml binds
+        // PatchGeometry: model heights + edge deltas + shared field + tile key
+        QHash<TileMath::TileKey, QByteArray> meshes;
+        for (const SurfaceModel::Patch& patch : patches) {
+            QVERIFY(patch.ready);
+            PatchGeometry geometry;
+            geometry.setGridSize(SurfaceModel::kGridSize);
+            geometry.setSpan(tileRect(patch.key).width());
+            geometry.setHeights(patch.heights);
+            geometry.setEdgeLodDeltas(model.edgeLodDeltas(patch.key));
+            geometry.setHeightField(&field);
+            geometry.setTileX(patch.key.x);
+            geometry.setTileY(patch.key.y);
+            geometry.setTileZoom(patch.key.zoom);
+            meshes.insert(patch.key, geometry.vertexData());
+        }
+
         for (const SurfaceModel::Patch& a : patches) {
             const QRectF rectA = tileRect(a.key);
             for (const SurfaceModel::Patch& b : patches) {
@@ -654,63 +678,93 @@ void SurfaceModelTest::_renderedEdgesContinuousAcrossLodBoundaries()
                     continue;
                 }
                 const QRectF rectB = tileRect(b.key);
-                for (const EdgeSpec& spec : edges) {
+                for (const QChar edgeA : {u'N', u'S', u'W', u'E'}) {
                     // The world line A's edge lies on; B must sit across it
-                    const double edgeLineA = (spec.edge == u'N')   ? rectA.bottom()  // north = max y
-                                             : (spec.edge == u'S') ? rectA.top()
-                                             : (spec.edge == u'W') ? rectA.left()
-                                                                   : rectA.right();
-                    const double edgeLineB = (spec.edge == u'N')   ? rectB.top()
-                                             : (spec.edge == u'S') ? rectB.bottom()
-                                             : (spec.edge == u'W') ? rectB.right()
-                                                                   : rectB.left();
+                    const double edgeLineA = (edgeA == u'N')   ? rectA.bottom()  // north = max y
+                                             : (edgeA == u'S') ? rectA.top()
+                                             : (edgeA == u'W') ? rectA.left()
+                                                               : rectA.right();
+                    const double edgeLineB = (edgeA == u'N')   ? rectB.top()
+                                             : (edgeA == u'S') ? rectB.bottom()
+                                             : (edgeA == u'W') ? rectB.right()
+                                                               : rectB.left();
                     const double tolerance = std::min(rectA.width(), rectB.width()) * 1e-9;
                     if (std::abs(edgeLineA - edgeLineB) > tolerance) {
                         continue;
                     }
-                    const double step = sharedEdgeMaxStep(model, a, b, spec.edge);
-                    if (step > worstStep) {
-                        worstStep = step;
-                        worst = QStringLiteral("%1 m step: z%2 (%3,%4) %5 edge vs z%6 (%7,%8), tilt %9 dist %10")
-                                    .arg(step, 0, 'f', 1)
-                                    .arg(a.key.zoom)
-                                    .arg(a.key.x)
-                                    .arg(a.key.y)
-                                    .arg(spec.edge)
-                                    .arg(b.key.zoom)
-                                    .arg(b.key.x)
-                                    .arg(b.key.y)
-                                    .arg(pose.tilt)
-                                    .arg(pose.distance);
-                        // TEMP DIAGNOSTIC
-                        if (step > 0.5) {
-                            qDebug() << "pair A" << a.key.zoom << a.key.x << a.key.y << "edge" << spec.edge << "B"
-                                     << b.key.zoom << b.key.x << b.key.y;
-                            const QList<int> dA = model.edgeLodDeltas(a.key);
-                            const QList<int> dB = model.edgeLodDeltas(b.key);
-                            qDebug() << "deltasA" << dA << "deltasB" << dB;
-                            const QList<float> freshA = field.samplePatch(a.key, SurfaceModel::kGridSize);
-                            const QList<float> freshB = field.samplePatch(b.key, SurfaceModel::kGridSize);
-                            qDebug() << "cached==fresh A" << (a.heights == freshA) << "B" << (b.heights == freshB);
-                            constexpr int kG = SurfaceModel::kGridSize;
-                            const QChar eB = (spec.edge == u'N')   ? u'S'
-                                             : (spec.edge == u'S') ? u'N'
-                                             : (spec.edge == u'W') ? u'E'
-                                                                   : u'W';
-                            for (int idx = 0; idx <= kG; idx++) {
-                                const double hA = renderedEdgeHeight(a.heights, dA, spec.edge, idx);
-                                const double hB = renderedEdgeHeight(b.heights, dB, eB, idx);
-                                qDebug() << "idx" << idx << "rawA" << renderedEdgeHeight(a.heights, {0, 0, 0, 0}, spec.edge, idx)
-                                         << "rawB" << renderedEdgeHeight(b.heights, {0, 0, 0, 0}, eB, idx) << "rendA" << hA
-                                         << "rendB" << hB;
-                            }
-                        }
+                    const bool horizontal = (edgeA == u'N') || (edgeA == u'S');
+                    const double lo =
+                        horizontal ? std::max(rectA.left(), rectB.left()) : std::max(rectA.top(), rectB.top());
+                    const double hi =
+                        horizontal ? std::min(rectA.right(), rectB.right()) : std::min(rectA.bottom(), rectB.bottom());
+                    if (hi <= lo) {
+                        continue;
+                    }
+                    const QChar edgeB = (edgeA == u'N') ? u'S' : (edgeA == u'S') ? u'N' : (edgeA == u'W') ? u'E' : u'W';
+                    const auto pairText = [&](double step, const char* what) {
+                        return QStringLiteral("%1: %2 m step, z%3 (%4,%5) %6 edge vs z%7 (%8,%9), tilt %10 dist %11")
+                            .arg(QLatin1StringView(what))
+                            .arg(step, 0, 'f', 3)
+                            .arg(a.key.zoom)
+                            .arg(a.key.x)
+                            .arg(a.key.y)
+                            .arg(edgeA)
+                            .arg(b.key.zoom)
+                            .arg(b.key.x)
+                            .arg(b.key.y)
+                            .arg(pose.tilt)
+                            .arg(pose.distance);
+                    };
+
+                    const TileMath::TileKey backA = field.backingKeyFor(a.key);
+                    const TileMath::TileKey backB = field.backingKeyFor(b.key);
+                    QVERIFY(TileMath::isValidKey(backA) && TileMath::isValidKey(backB));
+
+                    // Full segment, corners included: bounded by the source's
+                    // variation over each side's worst effective resolution —
+                    // its backing, or the coarsest perpendicular constraint
+                    // that may have captured a corner
+                    const QList<int> deltasA = model.edgeLodDeltas(a.key);
+                    const QList<int> deltasB = model.edgeLodDeltas(b.key);
+                    const int zEffA =
+                        std::min(backA.zoom, a.key.zoom - *std::max_element(deltasA.cbegin(), deltasA.cend()));
+                    const int zEffB =
+                        std::min(backB.zoom, b.key.zoom - *std::max_element(deltasB.cbegin(), deltasB.cend()));
+                    const double fullStep =
+                        segmentMaxStep(meshes[a.key], edgeA, rectA, meshes[b.key], edgeB, rectB, horizontal, lo, hi);
+                    QVERIFY2(fullStep <= stepBound(zEffA, zEffA, zEffB, zEffB),
+                             qPrintable(pairText(fullStep, "(b) full-segment bound exceeded")));
+
+                    // Interior (clear of corner capture): exact contracts
+                    const double cell = std::max(rectA.width(), rectB.width()) / SurfaceModel::kGridSize;
+                    const double loIn = lo + cell;
+                    const double hiIn = hi - cell;
+                    if (hiIn <= loIn) {
+                        continue;
+                    }
+                    const double innerStep = segmentMaxStep(meshes[a.key], edgeA, rectA, meshes[b.key], edgeB, rectB,
+                                                            horizontal, loIn, hiIn);
+                    if (a.key.zoom != b.key.zoom) {
+                        // (T) LOD boundary: the fine edge is constrained to
+                        // the coarse neighbor's own rendered polyline, so
+                        // only float-lerp rounding remains
+                        QVERIFY2(innerStep <= 1e-3, qPrintable(pairText(innerStep, "(T) stitch broken")));
+                        stitchedPairs++;
+                    } else if (backA == backB) {
+                        // (a) same backing tile: dyadic subwindow arithmetic
+                        // makes coincident edge samples bit-exact
+                        QCOMPARE(innerStep, 0.0);
+                    } else {
+                        // (b) different backings at the same level: interior
+                        // mismatch bounded by the border texel variation
+                        QVERIFY2(innerStep <= stepBound(a.key.zoom, backA.zoom, b.key.zoom, backB.zoom),
+                                 qPrintable(pairText(innerStep, "(b) interior bound exceeded")));
                     }
                 }
             }
         }
-        QVERIFY2(worstStep < 0.5, qPrintable(worst));
     }
+    QCOMPARE_GT(stitchedPairs, 0);  // the pose family must exercise LOD boundaries
 }
 
 void SurfaceModelTest::_tallTerrainRecullsOnDataArrival()

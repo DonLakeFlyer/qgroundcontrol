@@ -1,67 +1,91 @@
 # HANDOFF STATUS — continuous-drape-heightfield
 
-Machine handoff notes (desktop → laptop). Read together with
-`DESIGN-cesium-style-sampling.md` in this directory. Delete both files before
-the final PR.
+Machine handoff notes (laptop → desktop). Read together with
+`DESIGN-cesium-style-sampling.md` and `DEVELOPMENT-PROCESS.md` in this
+directory. Delete all working .md files in this directory before the final PR
+(this file, the design docs, `DEVELOPMENT-PROCESS.md`, `CESIUM-ANALYSIS.md`,
+`CESIUM-BACKEND-EVALUATION.md`, `THREADING-ANALYSIS.md`).
 
 ## Where things stand
 
-Branch `continuous-drape-heightfield`, base commit e4f28a7ac ("Step 6").
-Everything below is in the working tree (committed as WIP when this was
-pushed).
+Branch `continuous-drape-heightfield`.
+HEAD = de00cf4986 "feat(GeoMap): cut samplePatch over to cesium-style
+single-tile sampling" (Step 1, **not pushed**).
+**Step 2 is complete, reviewed, and green but UNCOMMITTED** — 15 modified
+files in the working tree (~483 insertions). Commit/push only on explicit
+instruction.
 
-### Done and green
+### Step 1 — committed (de00cf4986)
 
-- **Pinning in ElevationTilePyramid** (cesium-style, replaces feathering):
-  - `setPinnedKeys(QSet<TileKey>)`; `_evictLeastRecentlyUsed()` skips pinned
-    keys and returns invalid key `{0,0,-1}` when every resident tile is
-    pinned (insert then grows past `kMaxTiles` — soft cap).
-  - `insertTile(key, grid, TileKey* evictedKey)` out-param only written for
-    real evictions.
-  - Tests: `_pinnedTilesSurviveEviction`, `_allPinnedGrowsPastCap` —
-    ElevationTilePyramidTest 15/15 green.
-- **SurfaceModel maintains the pinned set**: after each update pass with
-  adds/removals, pins every resident patch key + full ancestor chain via
-  `_field->setPinnedKeys(...)`. Test `_pinsPatchBackingTiles` green.
-- **Feathering fully reverted** in HeightField (blend band, kFeatherFraction,
-  shrunk memo bounds, inflated regionChanged rects all gone). Kept: evicted
-  region `regionChanged` emission. HeightFieldTest 18/18 green
-  (`_heightAtContinuousAcrossResidencyBorders` replaced by
-  `_pinnedTilesSurviveInsertPressure`).
-- **Dyadic vertex positions in samplePatch** (global integer fractions) —
-  fixed cross-zoom ulp seams. NOTE: superseded by the design cutover (the
-  whole pointwise loop goes away), but harmless meanwhile.
-- **Memo key-arithmetic hit test** in `heightAt` — fixed warm-memo vs cold
-  lookup resolving different tiles at exact tile boundaries. Applied but the
-  post-fix build/test run was cancelled; not yet verified. Becomes
-  non-critical after the cutover.
-- Logging upgrade (TerrariumTileFetcher/TileImageSource throttled warnings) —
-  green, from earlier steps.
+- `HeightField::samplePatch` cutover to cesium-style single-tile sampling:
+  `bestTileFor(key)` + subwindow UV sampling; dyadic vertex positions.
+- Pinning in ElevationTilePyramid (replaces feathering, fully reverted);
+  SurfaceModel maintains the pinned set (resident keys + ancestor chains).
+- Review hardening: `_stitchAtWorldEdgeFallsBack`,
+  `_stitchedNorthEdgeUsesAncestorSouthRow` (mutation-tested), corner
+  precedence documented in `_heightAt`.
 
-### Red / in flux
+### Step 2 — done, reviewed, uncommitted
 
-- `SurfaceModelTest::_renderedEdgesContinuousAcrossLodBoundaries` — the 0.5 m
-  C0 repro test. Last failure: 176.3 m at z11 (1071,714) E vs (1072,714),
-  tilt 80 dist 3000 — root-caused to the memo boundary bug above. Per the
-  design, this test's contract is being **replaced**, not fixed (see design
-  §5). It still contains a TEMP DIAGNOSTIC block (labeled `// TEMP
-  DIAGNOSTIC`) that must be removed.
+- `HeightField::backingKeyFor()` (inline in .h; returns `{0,0,-1}` when the
+  view is invalid) + `HeightFieldTest::_backingKeyFor`.
+- Retired the 0.5 m contract: `_renderedEdgesContinuousAcrossLodBoundaries`
+  → `_renderedEdgeContractAcrossLodBoundaries` (three-part contract per
+  design §5: (a) same-backing exact 0.0, (T) ≤1e-3, (b) source-derived
+  bound). TEMP DIAGNOSTIC removed. SurfaceModelTest 25/25.
+- **Renderer wiring** (gap found during Step 2, user chose to wire now):
+  PatchGeometry got declarative Q_PROPERTYs `heightField`/`tileX`/`tileY`/
+  `tileZoom` (shared notify `tileKeyChanged`); `setHeightField` connects
+  `regionChanged` → `_fieldRegionChanged` (early-outs: all deltas 0, invalid
+  key, no inflated-rect intersect) and `destroyed` → null-and-rebuild.
+  SurfacePatchModel exposes `TileXRole`/`TileYRole` + `heightField`
+  Q_PROPERTY; GeoMap.qml delegate binds all four. FlyViewGeoUITest 7/7
+  (strict log mode) validates the real QML path.
+- Review-round fixes (all verified):
+  - destroyed-handler in `setHeightField` nulls, emits, rebuilds.
+  - HeightField.h: comment moved above `QML_ANONYMOUS` — `.clang-format`
+    lacks `StatementMacros`, so trailing comments on QML macros get mangled;
+    repo-wide StatementMacros fix deferred to a **separate PR**.
+  - SurfacePatchModel: comment documenting the unconditional
+    `heightFieldChanged` emit (pointer ABA hazard).
+  - Removed unused `#include <array>` from SurfaceModelTest.cc.
+  - **Rebuild coalescing in PatchGeometry**: setters/`_fieldRegionChanged`/
+    destroyed-lambda call `_requestRebuild()` (gated on
+    `isComponentComplete()`); `componentComplete()` override does base + one
+    `_rebuild()`. QML instantiation: 8 rebuilds → 1. C++-constructed objects
+    are complete from birth, so tests and `sampleFromField` (direct
+    `_rebuild()`) keep synchronous semantics.
+- Final pass done: 11/11 GeoMap ctest suites green; pre-commit clean on all
+  modified files (clang-tidy fails only where not installed locally).
+
+### Coverage (fresh counters, 11 suites + FlyViewGeoUITest)
+
+- HeightField.cc/.h 100%; PatchGeometry.cc 97%; SurfacePatchModel.cc 65%
+  (gaps are pre-existing stats/capture/imagery code, untouched).
+- Known uncovered **new** branches, user deferred adding tests ("not right
+  now") — candidate follow-up:
+  1. `setHeightField` replacing one live field with another (disconnect of
+     the old field).
+  2. `_fieldRegionChanged` invalid-key early-out.
+  3. `_coarseEdgeSamples` empty `ancestorHeights` return.
+  4. Same-value early-return guards in the new setters.
+- Coverage gotcha: a rebuild orphans old `.gcda` (stale-counter 1% readings);
+  `find build-coverage -name "*.gcda" -delete`, rerun suites, then gcovr:
+  `gcovr --root . build-coverage --filter 'src/GeoMap/...' --txt -`.
 
 ## Next steps (in order)
 
-1. Implement the design: rewrite `HeightField::samplePatch` to
-   `bestTileFor(K)` + subwindow UV sampling (design §1). TDD: write the
-   same-backing-tile bit-exact edge test first, verify red, then implement.
-2. Retire the 0.5 m contract: replace
-   `_renderedEdgesContinuousAcrossLodBoundaries` with the three-part contract
-   (design §5); remove the TEMP DIAGNOSTIC block.
-3. Skirt sizing by coarse-level geometric error (design §3) + test.
-4. Full regression: 11 GeoMap suites
-   `ctest --test-dir build-coverage -R "SurfaceModel|SurfacePatchModel|SurfaceAnalysis|SurfacePatchImagery|TerrariumTileFetcher|HeightSource|PatchGeometry|HeightField|ElevationTilePyramid|TileMath|GeoMapCamera|GeoMapProj"`,
+1. **Commit Step 2 first** (when instructed) — the working tree is the whole
+   step.
+2. Step 3: skirt sizing by coarse-level geometric error (design §3):
+   `TileMath::levelGeometricError`, skirt depth = 5 × geometric error of the
+   coarsest constraining level, replacing `kSkirtDepthFraction = 0.05`.
+   TDD: contract (c) red test first (uses `backingKeyFor`).
+3. Step 4 / wrap-up: full regression (11 suites + FlyViewGeoUITest),
    `just build`, `just lint`, clang-format touched files.
-5. Deferred: kMaxTiles capacity analysis (user explicitly wants this
-   revisited after the cutover).
-
+4. Deferred: kMaxTiles=128 capacity analysis (user explicitly wants this
+   revisited after the cutover); optional coverage tests above; separate PR
+   for `.clang-format` StatementMacros.
 ## Build/test loop on this branch
 
 - Check for a running build first: `pgrep -fl "ninja|cmake --build"` (user
@@ -69,10 +93,15 @@ pushed).
 - Build: `cmake --build build-coverage --target QGroundControl`
 - One suite:
   `./build-coverage/Debug/QGroundControl.app/Contents/MacOS/QGroundControl --unittest:<Name> --allow-multiple 2>&1 | grep -vE '^profiling' | grep -E "FAIL|Totals"`
+- Full regression: 11 GeoMap suites
+  `ctest --test-dir build-coverage -R "SurfaceModel|SurfacePatchModel|SurfaceAnalysis|SurfacePatchImagery|TerrariumTileFetcher|HeightSource|PatchGeometry|HeightField|ElevationTilePyramid|TileMath|GeoMapCamera|GeoMapProj"`
+  — plus FlyViewGeoUITest separately (not matched by that regex; it is the
+  only suite exercising the QML delegate path, incl. `componentComplete`).
 - Strict log mode: unexpected qCWarnings fail tests — use
   `expectLogMessage`/`ignoreLogMessage`.
 - clang-format: `CF=$(ls ~/.cache/pre-commit/*/py_env-*/bin/clang-format | head -1); "$CF" -i <files>`
-- pre-commit needs `source .venv/bin/activate`.
+- pre-commit needs `source .venv/bin/activate`. `just` was not installed on
+  the laptop — `pre-commit run --files <changed>` is the equivalent lint gate.
 
 ## Working agreements
 

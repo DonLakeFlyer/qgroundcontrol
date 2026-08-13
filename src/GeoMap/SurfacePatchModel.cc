@@ -301,6 +301,9 @@ void SurfacePatchModel::_rebuildSurfaceModel()
         connect(_surfaceModel, &SurfaceModel::patchRemoved, this, &SurfacePatchModel::_patchRemoved);
     }
     endResetModel();
+    // Unconditional: the field is recreated every rebuild, and address reuse
+    // by the allocator makes pointer comparison unsafe as a change guard
+    emit heightFieldChanged();
 
     if (_surfaceModel) {
         _surfaceModel->update();
@@ -537,6 +540,10 @@ QVariant SurfacePatchModel::data(const QModelIndex& index, int role) const
             return span;
         case ZoomRole:
             return key.zoom;
+        case TileXRole:
+            return key.x;
+        case TileYRole:
+            return key.y;
         case HeightsRole: {
             const auto patch = _surfaceModel->patch(key);
             return patch ? QVariant::fromValue(patch->heights) : QVariant::fromValue(QList<float>());
@@ -640,11 +647,18 @@ QImage SurfacePatchModel::_fallbackImage(const TileMath::TileKey& key) const
 QHash<int, QByteArray> SurfacePatchModel::roleNames() const
 {
     return {
-        {CenterXRole, "centerX"},           {SpanRole, "span"},
-        {CenterYRole, "centerY"},           {ZoomRole, "zoomLevel"},
-        {HeightsRole, "heights"},           {ReadyRole, "ready"},
-        {CoveredRole, "covered"},           {TileImageRole, "tileImage"},
-        {HasTileImageRole, "hasTileImage"}, {EdgeLodDeltasRole, "edgeLodDeltas"},
+        {CenterXRole, "centerX"},
+        {SpanRole, "span"},
+        {CenterYRole, "centerY"},
+        {ZoomRole, "zoomLevel"},
+        {HeightsRole, "heights"},
+        {ReadyRole, "ready"},
+        {CoveredRole, "covered"},
+        {TileImageRole, "tileImage"},
+        {HasTileImageRole, "hasTileImage"},
+        {EdgeLodDeltasRole, "edgeLodDeltas"},
+        {TileXRole, "tileX"},
+        {TileYRole, "tileY"},
     };
 }
 

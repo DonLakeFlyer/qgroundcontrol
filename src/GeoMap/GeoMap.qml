@@ -168,6 +168,8 @@ Item {
                     required property real centerY
                     required property real span
                     required property int zoomLevel
+                    required property int tileX
+                    required property int tileY
                     required property var heights
                     required property bool covered
                     required property var edgeLodDeltas
@@ -183,6 +185,14 @@ Item {
                         span: patchDelegate.span
                         heights: patchDelegate.heights
                         edgeLodDeltas: patchDelegate.edgeLodDeltas
+                        // Field + key context resolves stitched edges from the
+                        // coarse neighbor's actual backing tile (no T-junction
+                        // cracks); without it the stitch would assume its own
+                        // samples match the neighbor's
+                        heightField: patchModel.heightField
+                        tileX: patchDelegate.tileX
+                        tileY: patchDelegate.tileY
+                        tileZoom: patchDelegate.zoomLevel
                     }
 
                     Texture {

@@ -507,6 +507,85 @@ void PatchGeometryTest::_stitchInvalidDeltaWarns()
     }
 }
 
+void PatchGeometryTest::_declarativeFieldKeyStitchesLikeSampleFromField()
+{
+    // The QML render path binds heights (from the patch model), edge deltas,
+    // the shared height field, and the patch's tile key as independent
+    // declarative properties — it never calls sampleFromField. The resulting
+    // mesh must match the imperative sampleFromField path bit for bit.
+    HeightField field;
+    QVERIFY(field.insertTile(TileMath::TileKey{0, 0, 0}, uniformGrid(0.0f)));
+    QVERIFY(field.insertTile(TileMath::TileKey{6, 6, 3}, quadraticGrid()));
+
+    PatchGeometry reference;
+    reference.setGridSize(kGrid);
+    reference.setSpan(kSpan);
+    reference.setHeightField(&field);
+    reference.setEdgeLodDeltas(0, 0, 0, 1);
+    QVERIFY(reference.sampleFromField(TileMath::TileKey{11, 12, 4}));
+
+    PatchGeometry declarative;
+    declarative.setGridSize(kGrid);
+    declarative.setSpan(kSpan);
+    declarative.setHeights(field.samplePatch(TileMath::TileKey{11, 12, 4}, kGrid));
+    declarative.setEdgeLodDeltas(0, 0, 0, 1);
+    declarative.setHeightField(&field);
+    declarative.setTileX(11);
+    declarative.setTileY(12);
+    declarative.setTileZoom(4);
+    QCOMPARE(declarative.vertexData(), reference.vertexData());
+
+    // Sanity: without the key context the stitch falls back to own-sample
+    // lerp, so the key binding is what activates the field-resolved edge
+    PatchGeometry keyless;
+    keyless.setGridSize(kGrid);
+    keyless.setSpan(kSpan);
+    keyless.setHeights(field.samplePatch(TileMath::TileKey{11, 12, 4}, kGrid));
+    keyless.setEdgeLodDeltas(0, 0, 0, 1);
+    keyless.setHeightField(&field);
+    QCOMPARE_NE(keyless.vertexData(), reference.vertexData());
+}
+
+void PatchGeometryTest::_coarseEdgeRefreshesWhenNeighborTileArrives()
+{
+    // With single-tile backing, later data for the coarse neighbor's backing
+    // tile changes that neighbor's rendered edge but not this patch's own
+    // height grid — the heights binding never fires. The geometry must watch
+    // the field itself and re-resolve its constrained edges.
+    HeightField field;
+    QVERIFY(field.insertTile(TileMath::TileKey{0, 0, 0}, uniformGrid(0.0f)));
+
+    PatchGeometry fine;
+    fine.setGridSize(kGrid);
+    fine.setSpan(kSpan);
+    fine.setHeightField(&field);
+    fine.setEdgeLodDeltas(0, 0, 0, 1);
+    fine.setTileX(11);
+    fine.setTileY(12);
+    fine.setTileZoom(4);
+    fine.setHeights(field.samplePatch(TileMath::TileKey{11, 12, 4}, kGrid));  // flat zeros
+    QCOMPARE(vertexAt(fine.vertexData(), (1 * (kGrid + 1)) + kGrid)[2], 0.0f);
+
+    // The coarse east neighbor's backing tile arrives: adjacent, so the fine
+    // patch's own samples stay identical — only the constrained edge moves
+    QVERIFY(field.insertTile(TileMath::TileKey{6, 6, 3}, quadraticGrid()));
+
+    PatchGeometry coarse;
+    coarse.setGridSize(kGrid);
+    coarse.setSpan(kSpan);
+    coarse.setHeightField(&field);
+    QVERIFY(coarse.sampleFromField(TileMath::TileKey{6, 6, 3}));
+
+    const QByteArray fineData = fine.vertexData();
+    const QByteArray coarseData = coarse.vertexData();
+    const auto fineEastZ = [&](int row) { return vertexAt(fineData, (row * (kGrid + 1)) + kGrid)[2]; };
+    const auto coarseWestZ = [&](int row) { return vertexAt(coarseData, row * (kGrid + 1))[2]; };
+    for (int row = 0; row <= kGrid; row += 2) {
+        QCOMPARE(fineEastZ(row), coarseWestZ(row / 2));
+    }
+    QCOMPARE_NE(fineEastZ(2), 0.0f);  // sanity: the edge actually moved
+}
+
 void PatchGeometryTest::_gridSizeChangeResetsInvalidDeltas()
 {
     PatchGeometry geometry;

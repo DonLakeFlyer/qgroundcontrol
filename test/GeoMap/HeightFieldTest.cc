@@ -297,6 +297,25 @@ void HeightFieldTest::_samplePatchSingleLookupPerPatch()
     QCOMPARE(field.lookupCountForTest() - before, 1);
 }
 
+void HeightFieldTest::_backingKeyFor()
+{
+    HeightField field;
+
+    // Empty field: nothing backs any key
+    QVERIFY(!TileMath::isValidKey(field.backingKeyFor(TileKey{5, 6, 3})));
+
+    // Only an ancestor stored: it backs the descendant query
+    QVERIFY(field.insertTile(TileKey{0, 0, 0}, uniformGrid(1.0f)));
+    QCOMPARE(field.backingKeyFor(TileKey{5, 6, 3}), (TileKey{0, 0, 0}));
+
+    // The exact tile wins once stored
+    QVERIFY(field.insertTile(TileKey{5, 6, 3}, uniformGrid(2.0f)));
+    QCOMPARE(field.backingKeyFor(TileKey{5, 6, 3}), (TileKey{5, 6, 3}));
+
+    // Siblings are unaffected: still the ancestor
+    QCOMPARE(field.backingKeyFor(TileKey{6, 6, 3}), (TileKey{0, 0, 0}));
+}
+
 void HeightFieldTest::_memoInvalidatedOnInsert()
 {
     HeightField field;

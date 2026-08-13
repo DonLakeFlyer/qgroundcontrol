@@ -1,11 +1,13 @@
 #include "SurfacePatchModelTest.h"
 
+#include <QtCore/QPointF>
 #include <QtTest/QSignalSpy>
 
 #include <cmath>
 
 #include "GeoMapCamera.h"
 #include "GeoScene.h"
+#include "HeightField.h"
 #include "SurfaceModel.h"
 #include "SurfacePatchModel.h"
 #include "TileMath.h"
@@ -262,6 +264,50 @@ void SurfacePatchModelTest::_edgeLodDeltasRoleStitchesLodRings()
         }
     }
     QVERIFY2(deltasRefreshed, "no dataChanged carried EdgeLodDeltasRole during LOD churn");
+}
+
+void SurfacePatchModelTest::_tileKeyAndHeightFieldExposedToDelegates()
+{
+    // PatchGeometry resolves stitched edges from the shared height field at
+    // the patch's own tile key: delegates need the field pointer and the key
+    // (tileX, tileY + the existing zoomLevel) as bindable data.
+    GeoMapCamera camera;
+    GeoScene scene;
+    SurfacePatchModel model;
+    setupCamera(camera);
+    attach(model, scene, camera);
+    QCOMPARE_GT(model.rowCount(), 0);
+
+    QVERIFY(model.roleNames().value(SurfacePatchModel::TileXRole) == QByteArray("tileX"));
+    QVERIFY(model.roleNames().value(SurfacePatchModel::TileYRole) == QByteArray("tileY"));
+    QVERIFY(model.heightField() != nullptr);
+
+    for (int row = 0; row < model.rowCount(); row++) {
+        const QModelIndex idx = model.index(row);
+        const TileMath::TileKey key{model.data(idx, SurfacePatchModel::TileXRole).toInt(),
+                                    model.data(idx, SurfacePatchModel::TileYRole).toInt(),
+                                    model.data(idx, SurfacePatchModel::ZoomRole).toInt()};
+        QVERIFY(TileMath::isValidKey(key));
+
+        // The key must address the patch actually rendered there: its tile
+        // rect (scene-relative) matches the row's center and span
+        const double span = TileMath::tileSpanAtZoom(key.zoom);
+        QCOMPARE(model.data(idx, SurfacePatchModel::SpanRole).toDouble(), span);
+        const QPointF minCorner = TileMath::tileMinCorner(key);
+        const QPointF sceneCenter(minCorner.x() + (span / 2.0) - scene.sceneOrigin().x(),
+                                  minCorner.y() + (span / 2.0) - scene.sceneOrigin().y());
+        QCOMPARE(model.data(idx, SurfacePatchModel::CenterXRole).toDouble(), sceneCenter.x());
+        QCOMPARE(model.data(idx, SurfacePatchModel::CenterYRole).toDouble(), sceneCenter.y());
+    }
+
+    // The exposed field is the live one: model heights come from it
+    QTRY_COMPARE_WITH_TIMEOUT(model.pendingCount(), 0, 5000);
+    const QModelIndex first = model.index(0);
+    const TileMath::TileKey firstKey{model.data(first, SurfacePatchModel::TileXRole).toInt(),
+                                     model.data(first, SurfacePatchModel::TileYRole).toInt(),
+                                     model.data(first, SurfacePatchModel::ZoomRole).toInt()};
+    const auto heights = model.data(first, SurfacePatchModel::HeightsRole).value<QList<float>>();
+    QCOMPARE(model.heightField()->samplePatch(firstKey, model.gridSize()), heights);
 }
 
 UT_REGISTER_TEST_LIGHTWEIGHT(SurfacePatchModelTest, TestLabel::Unit)

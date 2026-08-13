@@ -24,7 +24,7 @@ private slots:
     void _coverageMaintainedDuringLodChurn();
     void _coverageSweepAcrossPoses();
     void _coverageAfterInteractiveGesture();
-    void _renderedEdgesContinuousAcrossLodBoundaries();
+    void _renderedEdgeContractAcrossLodBoundaries();
     void _tallTerrainRecullsOnDataArrival();
     void _cameraGroundTileResidentOverFlatTerrain();
     void _edgeLodDeltasMatchResidentNeighbors();

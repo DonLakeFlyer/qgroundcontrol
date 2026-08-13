@@ -31,6 +31,7 @@ class SurfaceModel;
 class TileImageSource;
 
 Q_MOC_INCLUDE("GeoScene.h")
+Q_MOC_INCLUDE("HeightField.h")
 
 /// QML bridge between SurfaceModel and the Repeater3D that renders the surface:
 /// one row per active patch, updated incrementally (no model resets on pan/zoom).
@@ -49,6 +50,7 @@ class SurfacePatchModel : public QAbstractListModel
     Q_PROPERTY(double maxRangeMultiplier READ maxRangeMultiplier CONSTANT)
     Q_PROPERTY(int patchCount READ patchCount NOTIFY statsChanged)
     Q_PROPERTY(int pendingCount READ pendingCount NOTIFY statsChanged)
+    Q_PROPERTY(HeightField* heightField READ heightField NOTIFY heightFieldChanged)
     Q_PROPERTY(int maxZoomLevel READ maxZoomLevel NOTIFY statsChanged)
     Q_PROPERTY(bool statsEnabled READ statsEnabled WRITE setStatsEnabled NOTIFY statsEnabledChanged)
     Q_PROPERTY(QString statsText READ statsText NOTIFY statsTextChanged)
@@ -70,6 +72,8 @@ public:
         TileImageRole,                   ///< drapable image: own tile, or ancestor/descendant fallback while loading
         HasTileImageRole,                ///< QImage is opaque to QML; bool validity for bindings
         EdgeLodDeltasRole,               ///< {N,S,W,E} coarser-neighbor LOD deltas for edge stitching
+        TileXRole,                       ///< slippy tile x of the patch key (with ZoomRole: PatchGeometry.tileX)
+        TileYRole,                       ///< slippy tile y of the patch key
     };
 
     GeoScene* scene() const { return _scene; }
@@ -93,6 +97,11 @@ public:
     void setMapType(const QString& mapType);
 
     int gridSize() const;
+
+    /// The shared terrain field patches sample from; delegates hand it to
+    /// PatchGeometry so stitched edges resolve against the same data. Owned
+    /// here; replaced (with notify) whenever the surface model is rebuilt.
+    HeightField* heightField() const { return _heightField; }
 
     /// SurfaceModel::kMaxRangeMultiplier, exposed so the scene camera's far
     /// clip plane can cover the full retained patch range
@@ -149,6 +158,7 @@ signals:
     void terrainChanged();
     void debugHillsChanged();
     void mapTypeChanged();
+    void heightFieldChanged();
     void statsChanged();
     void statsEnabledChanged();
     void statsTextChanged();

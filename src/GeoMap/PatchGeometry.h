@@ -10,6 +10,7 @@
 #pragma once
 
 #include <QtCore/QList>
+#include <QtCore/QRectF>
 #include <QtQuick3D/QQuick3DGeometry>
 
 #include <array>
@@ -17,6 +18,8 @@
 #include "TileMath.h"
 
 class HeightField;
+
+Q_MOC_INCLUDE("HeightField.h")
 
 /// Grid mesh for one surface patch of the GeoMap engine.
 ///
@@ -41,6 +44,10 @@ class PatchGeometry : public QQuick3DGeometry
     Q_PROPERTY(qreal span READ span WRITE setSpan NOTIFY spanChanged)
     Q_PROPERTY(QList<float> heights READ heights WRITE setHeights NOTIFY heightsChanged)
     Q_PROPERTY(QList<int> edgeLodDeltas READ edgeLodDeltas WRITE setEdgeLodDeltas NOTIFY edgeLodDeltasChanged)
+    Q_PROPERTY(HeightField* heightField READ heightField WRITE setHeightField NOTIFY heightFieldChanged)
+    Q_PROPERTY(int tileX READ tileX WRITE setTileX NOTIFY tileKeyChanged)
+    Q_PROPERTY(int tileY READ tileY WRITE setTileY NOTIFY tileKeyChanged)
+    Q_PROPERTY(int tileZoom READ tileZoom WRITE setTileZoom NOTIFY tileKeyChanged)
 
 public:
     explicit PatchGeometry(QQuick3DObject* parent = nullptr);
@@ -62,10 +69,28 @@ public:
 
     void setHeights(const QList<float>& heights);
 
-    /// Field to sample vertex heights from; not owned, may be null
+    /// Field to sample vertex heights from; not owned, may be null. Watches
+    /// the field's regionChanged to re-resolve constrained edges whose coarse
+    /// neighbor data changes without touching this patch's own heights.
     HeightField* heightField() const { return _heightField; }
 
-    void setHeightField(HeightField* heightField) { _heightField = heightField; }
+    void setHeightField(HeightField* heightField);
+
+    /// This patch's own slippy tile key, needed (with the field) to resolve
+    /// constrained edges from the coarse neighbor's actual backing tile.
+    /// tileZoom < 0 (the default) means no key context: the stitch falls
+    /// back to own-sample lerp.
+    int tileX() const { return _key.x; }
+
+    void setTileX(int tileX);
+
+    int tileY() const { return _key.y; }
+
+    void setTileY(int tileY);
+
+    int tileZoom() const { return _key.zoom; }
+
+    void setTileZoom(int tileZoom);
 
     /// Samples the height field at this patch's vertex world positions (tile
     /// \a key at the current gridSize) and rebuilds the mesh. Returns false
@@ -91,6 +116,11 @@ signals:
     void spanChanged();
     void heightsChanged();
     void edgeLodDeltasChanged();
+    void heightFieldChanged();
+    void tileKeyChanged();
+
+protected:
+    void componentComplete() override;
 
 private:
     /// Edge index order shared by the delta/offset/sample member arrays: N,S,W,E
@@ -104,6 +134,10 @@ private:
     };
 
     void _rebuild();
+    /// Defers to one build at componentComplete during QML instantiation;
+    /// immediate otherwise (C++ construction is always "complete")
+    void _requestRebuild();
+    void _fieldRegionChanged(const QRectF& worldRect);
     float _heightAt(int row, int col) const;
     float _rawHeightAt(int row, int col) const;
     void _resolveCoarseEdges();

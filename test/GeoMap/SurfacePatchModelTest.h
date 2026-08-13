@@ -16,4 +16,5 @@ private slots:
     void _debugHillsSwitchResets();
     void _rowsAlwaysMeshedDuringLodChurn();
     void _edgeLodDeltasRoleStitchesLodRings();
+    void _tileKeyAndHeightFieldExposedToDelegates();
 };

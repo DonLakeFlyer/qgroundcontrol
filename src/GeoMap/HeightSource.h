@@ -73,6 +73,8 @@ class ProceduralHeightSource : public HeightSource
 public:
     using HeightSource::HeightSource;
 
+    static constexpr int kSynthGridSize = 33;  ///< samples per edge of a synthesized tile
+
     int requestPatchHeights(const TileMath::TileKey& key, int gridSize) final;
     void cancelRequest(int requestId) final;
 
@@ -86,8 +88,6 @@ protected:
 
 private:
     void _deliver(int requestId);
-
-    static constexpr int kSynthGridSize = 33;  ///< samples per edge of a synthesized tile
 
     QHash<int, QList<float>> _pending;
 };
