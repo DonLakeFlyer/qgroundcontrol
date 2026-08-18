@@ -50,6 +50,11 @@ public:
         return QString();
     }
 
+    QString geoMapVisualQML() const final
+    {
+        return QString();
+    }
+
     bool load(const QJsonObject& complexObject, int sequenceNumber, QString& errorString) final
     {
         Q_UNUSED(complexObject);

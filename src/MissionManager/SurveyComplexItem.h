@@ -31,6 +31,7 @@ public:
     void            applyPreviousAltitudeFrame(QGroundControlQmlGlobal::AltitudeFrame prevAltFrame, double prevAltitude) final;
     bool            load                (const QJsonObject& complexObject, int sequenceNumber, QString& errorString) final;
     QString         mapVisualQML        (void) const final { return QStringLiteral("SurveyMapVisual.qml"); }
+    QString         geoMapVisualQML     (void) const final { return QStringLiteral("GeoMapSurveyVisual.qml"); }
     QString         presetsSettingsGroup(void) { return settingsGroup; }
     void            savePreset          (const QString& name);
     void            loadPreset          (const QString& name);

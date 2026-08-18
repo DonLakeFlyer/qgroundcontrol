@@ -55,6 +55,7 @@ public:
     bool    load                (const QJsonObject& complexObject, int sequenceNumber, QString& errorString) final;
     double  greatestDistanceTo  (const QGeoCoordinate &other) const final;
     QString mapVisualQML        (void) const final { return QStringLiteral("StructureScanMapVisual.qml"); }
+    QString geoMapVisualQML     (void) const final { return QStringLiteral("GeoMapStructureScanVisual.qml"); }
 
     // Overrides from VisualMissionItem
     bool                dirty                       (void) const final { return _dirty; }
