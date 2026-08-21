@@ -24,6 +24,12 @@
 
 UT_REGISTER_TEST(FlyViewGeoUITest, TestLabel::Integration)
 
+namespace {
+// Generous ceilings: first appearance of loader/engine-gated items vs. QTRY settle polling
+constexpr int kItemAppearTimeoutMs = 10000;
+constexpr int kSettleTimeoutMs = 5000;
+}  // namespace
+
 void FlyViewGeoUITest::_testHiddenWhenDisabled()
 {
     startUI();
@@ -45,10 +51,11 @@ void FlyViewGeoUITest::_testHiddenWhenDisabled()
 
 void FlyViewGeoUITest::_testViewSwitchWhenEnabled()
 {
-    Fact* const enabled = SettingsManager::instance()->geoViewSettings()->enabled();
-    const QVariant savedEnabled = enabled->rawValue();
-    const auto guard = qScopeGuard([enabled, savedEnabled] { enabled->setRawValue(savedEnabled); });
-    enabled->setRawValue(true);
+    Fact* const geoViewEnabledFact = SettingsManager::instance()->geoViewSettings()->enabled();
+    const QVariant savedEnabled = geoViewEnabledFact->rawValue();
+    const auto guard =
+        qScopeGuard([geoViewEnabledFact, savedEnabled] { geoViewEnabledFact->setRawValue(savedEnabled); });
+    geoViewEnabledFact->setRawValue(true);
 
     startUI();
     if (QTest::currentTestFailed())
@@ -68,9 +75,10 @@ void FlyViewGeoUITest::_testViewSwitchWhenEnabled()
 
     // The 3D viewport instantiates and the patch repeater populates from the
     // SurfaceModel regardless of render backend
-    QQuickItem* const viewport = findVisibleItem(_rootItem, QStringLiteral("geoMapViewport"), 10000);
+    QQuickItem* const viewport = findVisibleItem(_rootItem, QStringLiteral("geoMapViewport"), kItemAppearTimeoutMs);
     QVERIFY2(viewport, "GeoView 3D viewport not visible");
-    QTRY_VERIFY_WITH_TIMEOUT(!viewport->findChildren<QObject*>(QStringLiteral("geoMapPatchDelegate")).isEmpty(), 5000);
+    QTRY_VERIFY_WITH_TIMEOUT(!viewport->findChildren<QObject*>(QStringLiteral("geoMapPatchDelegate")).isEmpty(),
+                             kSettleTimeoutMs);
     QVERIFY2(findVisibleItem(_rootItem, QStringLiteral("flyViewGeoDebugOverlay")), "Debug overlay not visible");
 
     // Tile imagery flows end-to-end: the model is wired to the flight map
@@ -90,7 +98,7 @@ void FlyViewGeoUITest::_testViewSwitchWhenEnabled()
         }
         return true;
     };
-    QTRY_VERIFY_WITH_TIMEOUT(allPatchesImaged(), 5000);
+    QTRY_VERIFY_WITH_TIMEOUT(allPatchesImaged(), kSettleTimeoutMs);
 
     // Scene camera node tracks the GeoMapCamera debug pose (overhead at 1500m,
     // identity rotation, origin anchored at the camera center)
@@ -111,16 +119,59 @@ void FlyViewGeoUITest::_testViewSwitchWhenEnabled()
     stopUI();
 }
 
+void FlyViewGeoUITest::_testFlyViewEngineSwap()
+{
+    Fact* const geoViewEnabledFact = SettingsManager::instance()->geoViewSettings()->enabled();
+    const QVariant savedEnabled = geoViewEnabledFact->rawValue();
+    const auto guard =
+        qScopeGuard([geoViewEnabledFact, savedEnabled] { geoViewEnabledFact->setRawValue(savedEnabled); });
+    geoViewEnabledFact->setRawValue(false);
+
+    startUI();
+    if (QTest::currentTestFailed())
+        return;
+
+    // Default engine: QtLocation map, GeoMap adapter not instantiated
+    QVERIFY2(findVisibleItem(_rootItem, QStringLiteral("flyViewMap")), "QtLocation fly view map not visible");
+    QVERIFY2(!findVisibleItem(_rootItem, QStringLiteral("flyViewGeoMapAdapter"), 0),
+             "GeoMap adapter visible although the engine setting is disabled");
+
+    // Non-strict: see _testViewSwitchWhenEnabled
+    const std::optional<bool> rhiBased = expectSoftwareBackendWarnings(/*strict*/ false);
+    QVERIFY2(rhiBased.has_value(), "No renderer interface on the main window");
+
+    // Runtime swap to the GeoMap engine
+    geoViewEnabledFact->setRawValue(true);
+    QQuickItem* const adapter =
+        findVisibleItem(_rootItem, QStringLiteral("flyViewGeoMapAdapter"), kItemAppearTimeoutMs);
+    QVERIFY2(adapter, "GeoMap adapter not visible after enabling the engine setting");
+    QTRY_VERIFY_WITH_TIMEOUT(adapter->width() > 0 && adapter->height() > 0, kSettleTimeoutMs);
+    QVERIFY2(!findVisibleItem(_rootItem, QStringLiteral("flyViewMap"), 0),
+             "QtLocation map still visible after the engine swap");
+    QVERIFY2(findVisibleItem(_rootItem, QStringLiteral("flyViewGeoMapModeButton")),
+             "GeoMap chrome not visible on the fly view map");
+
+    // Swap back restores the QtLocation engine
+    geoViewEnabledFact->setRawValue(false);
+    QVERIFY2(findVisibleItem(_rootItem, QStringLiteral("flyViewMap"), kItemAppearTimeoutMs),
+             "QtLocation map did not return after disabling the engine setting");
+    QVERIFY2(!findVisibleItem(_rootItem, QStringLiteral("flyViewGeoMapAdapter"), 0),
+             "GeoMap adapter still visible after disabling the engine setting");
+
+    stopUI();
+}
+
 // Exercises every camera gesture against the real view: left-drag pan,
 // right-drag orbit, Shift+left-drag orbit (with pivot ring), Ctrl+left-drag
 // first-person look, wheel zoom, and synthesized multi-touch (pinch zoom,
 // two-finger twist).
 void FlyViewGeoUITest::_testCameraGestures()
 {
-    Fact* const enabled = SettingsManager::instance()->geoViewSettings()->enabled();
-    const QVariant savedEnabled = enabled->rawValue();
-    const auto guard = qScopeGuard([enabled, savedEnabled] { enabled->setRawValue(savedEnabled); });
-    enabled->setRawValue(true);
+    Fact* const geoViewEnabledFact = SettingsManager::instance()->geoViewSettings()->enabled();
+    const QVariant savedEnabled = geoViewEnabledFact->rawValue();
+    const auto guard =
+        qScopeGuard([geoViewEnabledFact, savedEnabled] { geoViewEnabledFact->setRawValue(savedEnabled); });
+    geoViewEnabledFact->setRawValue(true);
 
     startUI();
     if (QTest::currentTestFailed())
@@ -130,7 +181,7 @@ void FlyViewGeoUITest::_testCameraGestures()
     QVERIFY2(rhiBased.has_value(), "No renderer interface on the main window");
 
     QVERIFY(clickToolSelectDropdownButton(QStringLiteral("toolbar_viewGeo")));
-    QQuickItem* const viewport = findVisibleItem(_rootItem, QStringLiteral("geoMapViewport"), 10000);
+    QQuickItem* const viewport = findVisibleItem(_rootItem, QStringLiteral("geoMapViewport"), kItemAppearTimeoutMs);
     QVERIFY2(viewport, "GeoView 3D viewport not visible");
 
     // Non-visual QObject sibling of the viewport: search from the scene root
@@ -149,7 +200,7 @@ void FlyViewGeoUITest::_testCameraGestures()
     // Unlock tilt gestures once up front: the mode change starts the animated
     // 2D->3D transition, so wait for it to settle before posing the camera
     cam->setMode(GeoMapCamera::Mode::Mode3D);
-    QTRY_COMPARE_WITH_TIMEOUT(cam->tilt(), GeoMapCamera::kDefault3DTilt, 5000);
+    QTRY_COMPARE_WITH_TIMEOUT(cam->tilt(), GeoMapCamera::kDefault3DTilt, kSettleTimeoutMs);
 
     // Known pose before every gesture: mercator origin, heading 0, tilt 30,
     // distance 1500 (tilted so orbit/tilt deltas are observable both ways)
@@ -168,7 +219,7 @@ void FlyViewGeoUITest::_testCameraGestures()
     resetPose();
     const QGeoCoordinate centerBefore = cam->center();
     mouseDrag(Qt::LeftButton, center, QPoint(60, 40));
-    QTRY_VERIFY_WITH_TIMEOUT(cam->center().distanceTo(centerBefore) > 1.0, 5000);
+    QTRY_VERIFY_WITH_TIMEOUT(cam->center().distanceTo(centerBefore) > 1.0, kSettleTimeoutMs);
     QCOMPARE(cam->heading(), 0.0);
     QCOMPARE(cam->tilt(), 30.0);
     QCOMPARE(cam->distance(), 1500.0);
@@ -176,14 +227,14 @@ void FlyViewGeoUITest::_testCameraGestures()
     // Right drag right by a quarter of the width: orbit 90 deg heading
     resetPose();
     mouseDrag(Qt::RightButton, center, QPoint(qRound(w / 4), 0));
-    QTRY_VERIFY_WITH_TIMEOUT(qAbs(cam->heading() - 90.0) < 0.5, 5000);
+    QTRY_VERIFY_WITH_TIMEOUT(qAbs(cam->heading() - 90.0) < 0.5, kSettleTimeoutMs);
     QVERIFY(qAbs(cam->tilt() - 30.0) < 0.5);
     QCOMPARE(cam->distance(), 1500.0);
 
     // Right drag up a quarter of the height: tilt +45
     resetPose();
     mouseDrag(Qt::RightButton, center, QPoint(0, qRound(-h / 4)));
-    QTRY_VERIFY_WITH_TIMEOUT(qAbs(cam->tilt() - 75.0) < 0.5, 5000);
+    QTRY_VERIFY_WITH_TIMEOUT(qAbs(cam->tilt() - 75.0) < 0.5, kSettleTimeoutMs);
 
     // Shift+left drag: same orbit — pivot ring visible at the press point
     // while dragging, pressed ground point pinned to its screen position,
@@ -212,7 +263,7 @@ void FlyViewGeoUITest::_testCameraGestures()
         QCOMPARE_LT((ringCenter - QPointF(pressPos)).manhattanLength(), 3.0);
 
         QTest::mouseRelease(_window, Qt::LeftButton, Qt::ShiftModifier, pressPos + delta);
-        QTRY_VERIFY_WITH_TIMEOUT(qAbs(cam->heading() - 90.0) < 0.5, 5000);
+        QTRY_VERIFY_WITH_TIMEOUT(qAbs(cam->heading() - 90.0) < 0.5, kSettleTimeoutMs);
         QVERIFY(qAbs(cam->tilt() - 52.5) < 0.5);
         QCOMPARE(cam->distance(), 1500.0);
 
@@ -251,7 +302,7 @@ void FlyViewGeoUITest::_testCameraGestures()
         QTest::mouseRelease(_window, Qt::LeftButton, Qt::ControlModifier, center + delta);
 
         // Quarter width = 90 deg heading; drag down an eighth = look down 22.5 deg
-        QTRY_VERIFY_WITH_TIMEOUT(qAbs(cam->heading() - 90.0) < 0.5, 5000);
+        QTRY_VERIFY_WITH_TIMEOUT(qAbs(cam->heading() - 90.0) < 0.5, kSettleTimeoutMs);
         QVERIFY(qAbs(cam->tilt() - 7.5) < 0.5);
 
         // Camera position unchanged; distance re-solved along the new view axis
@@ -264,10 +315,10 @@ void FlyViewGeoUITest::_testCameraGestures()
     // Wheel up: zoom in; wheel down: zoom out
     resetPose();
     QTest::wheelEvent(_window, center, QPoint(0, 120));
-    QTRY_VERIFY_WITH_TIMEOUT(cam->distance() < 1500.0, 5000);
+    QTRY_VERIFY_WITH_TIMEOUT(cam->distance() < 1500.0, kSettleTimeoutMs);
     resetPose();
     QTest::wheelEvent(_window, center, QPoint(0, -120));
-    QTRY_VERIFY_WITH_TIMEOUT(cam->distance() > 1500.0, 5000);
+    QTRY_VERIFY_WITH_TIMEOUT(cam->distance() > 1500.0, kSettleTimeoutMs);
 
     QPointingDevice* const touchDevice = QTest::createTouchDevice();
 
@@ -281,7 +332,7 @@ void FlyViewGeoUITest::_testCameraGestures()
         }
         touch.release(0, center + QPoint(-150, 0)).release(1, center + QPoint(150, 0)).commit();
     }
-    QTRY_VERIFY_WITH_TIMEOUT(cam->distance() < 1500.0, 5000);
+    QTRY_VERIFY_WITH_TIMEOUT(cam->distance() < 1500.0, kSettleTimeoutMs);
 
     // Two-finger twist 90 deg visually counterclockwise (y-down screen): the
     // world follows the fingers, so heading decreases (mod 360). The
@@ -299,7 +350,7 @@ void FlyViewGeoUITest::_testCameraGestures()
         }
         touch.release(0, center + QPoint(0, r)).release(1, center + QPoint(0, -r)).commit();
     }
-    QTRY_VERIFY_WITH_TIMEOUT(cam->heading() < 315.0, 5000);
+    QTRY_VERIFY_WITH_TIMEOUT(cam->heading() < 315.0, kSettleTimeoutMs);
     QVERIFY2(cam->heading() > 265.0,
              qPrintable(QStringLiteral("twist overshot the finger rotation: %1").arg(cam->heading())));
 
@@ -311,10 +362,11 @@ void FlyViewGeoUITest::_testCameraGestures()
 // control animates heading back to north-up
 void FlyViewGeoUITest::_testModeToggleAndCompass()
 {
-    Fact* const enabled = SettingsManager::instance()->geoViewSettings()->enabled();
-    const QVariant savedEnabled = enabled->rawValue();
-    const auto guard = qScopeGuard([enabled, savedEnabled] { enabled->setRawValue(savedEnabled); });
-    enabled->setRawValue(true);
+    Fact* const geoViewEnabledFact = SettingsManager::instance()->geoViewSettings()->enabled();
+    const QVariant savedEnabled = geoViewEnabledFact->rawValue();
+    const auto guard =
+        qScopeGuard([geoViewEnabledFact, savedEnabled] { geoViewEnabledFact->setRawValue(savedEnabled); });
+    geoViewEnabledFact->setRawValue(true);
 
     startUI();
     if (QTest::currentTestFailed())
@@ -324,7 +376,7 @@ void FlyViewGeoUITest::_testModeToggleAndCompass()
     QVERIFY2(rhiBased.has_value(), "No renderer interface on the main window");
 
     QVERIFY(clickToolSelectDropdownButton(QStringLiteral("toolbar_viewGeo")));
-    QQuickItem* const viewport = findVisibleItem(_rootItem, QStringLiteral("geoMapViewport"), 10000);
+    QQuickItem* const viewport = findVisibleItem(_rootItem, QStringLiteral("geoMapViewport"), kItemAppearTimeoutMs);
     QVERIFY2(viewport, "GeoView 3D viewport not visible");
 
     auto* const cam = viewport->parentItem()->findChild<GeoMapCamera*>(QStringLiteral("geoMapCamera"));
@@ -343,15 +395,15 @@ void FlyViewGeoUITest::_testModeToggleAndCompass()
     QVERIFY(clickButton(QStringLiteral("flyViewGeoModeButton")));
     QCOMPARE(cam->mode(), GeoMapCamera::Mode::Mode3D);
     QCOMPARE(modeButton->property("text").toString(), QStringLiteral("2D"));
-    QTRY_COMPARE_WITH_TIMEOUT(cam->tilt(), GeoMapCamera::kDefault3DTilt, 5000);
-    QTRY_COMPARE_WITH_TIMEOUT(sceneRoot->property("terrainScale").toDouble(), 1.0, 5000);
+    QTRY_COMPARE_WITH_TIMEOUT(cam->tilt(), GeoMapCamera::kDefault3DTilt, kSettleTimeoutMs);
+    QTRY_COMPARE_WITH_TIMEOUT(sceneRoot->property("terrainScale").toDouble(), 1.0, kSettleTimeoutMs);
     QVERIFY(!cam->isTopDown());
 
     // Toggle back to 2D: tilt and terrain animate down
     QVERIFY(clickButton(QStringLiteral("flyViewGeoModeButton")));
     QCOMPARE(cam->mode(), GeoMapCamera::Mode::Mode2D);
-    QTRY_COMPARE_WITH_TIMEOUT(cam->tilt(), 0.0, 5000);
-    QTRY_COMPARE_WITH_TIMEOUT(sceneRoot->property("terrainScale").toDouble(), 0.0, 5000);
+    QTRY_COMPARE_WITH_TIMEOUT(cam->tilt(), 0.0, kSettleTimeoutMs);
+    QTRY_COMPARE_WITH_TIMEOUT(sceneRoot->property("terrainScale").toDouble(), 0.0, kSettleTimeoutMs);
     QVERIFY(cam->isTopDown());
 
     // Tilt lock: a vertical right-drag in 2D must not pitch the map
@@ -366,7 +418,7 @@ void FlyViewGeoUITest::_testModeToggleAndCompass()
     // Compass reset from a heading past 180: wraps the short way back to north
     cam->setHeading(350);
     QVERIFY(clickButton(QStringLiteral("flyViewGeoCompassButton")));
-    QTRY_COMPARE_WITH_TIMEOUT(cam->heading(), 0.0, 5000);
+    QTRY_COMPARE_WITH_TIMEOUT(cam->heading(), 0.0, kSettleTimeoutMs);
 
     stopUI();
 }
@@ -379,10 +431,11 @@ void FlyViewGeoUITest::_testModeToggleAndCompass()
 // elevations).
 void FlyViewGeoUITest::_testDebugHillsToggle()
 {
-    Fact* const enabled = SettingsManager::instance()->geoViewSettings()->enabled();
-    const QVariant savedEnabled = enabled->rawValue();
-    const auto guard = qScopeGuard([enabled, savedEnabled] { enabled->setRawValue(savedEnabled); });
-    enabled->setRawValue(true);
+    Fact* const geoViewEnabledFact = SettingsManager::instance()->geoViewSettings()->enabled();
+    const QVariant savedEnabled = geoViewEnabledFact->rawValue();
+    const auto guard =
+        qScopeGuard([geoViewEnabledFact, savedEnabled] { geoViewEnabledFact->setRawValue(savedEnabled); });
+    geoViewEnabledFact->setRawValue(true);
 
     startUI();
     if (QTest::currentTestFailed())
@@ -392,7 +445,7 @@ void FlyViewGeoUITest::_testDebugHillsToggle()
     QVERIFY2(rhiBased.has_value(), "No renderer interface on the main window");
 
     QVERIFY(clickToolSelectDropdownButton(QStringLiteral("toolbar_viewGeo")));
-    QQuickItem* const viewport = findVisibleItem(_rootItem, QStringLiteral("geoMapViewport"), 10000);
+    QQuickItem* const viewport = findVisibleItem(_rootItem, QStringLiteral("geoMapViewport"), kItemAppearTimeoutMs);
     QVERIFY2(viewport, "GeoView 3D viewport not visible");
 
     auto* const patchModel = viewport->parentItem()->findChild<SurfacePatchModel*>(QStringLiteral("geoMapPatchModel"));
@@ -414,18 +467,18 @@ void FlyViewGeoUITest::_testDebugHillsToggle()
     // Terrain is the default: flat zero heights outside the synthetic regions
     QVERIFY(!patchModel->debugHills());
     QVERIFY(patchModel->terrain());
-    QTRY_COMPARE_WITH_TIMEOUT(patchModel->pendingCount(), 0, 5000);
+    QTRY_COMPARE_WITH_TIMEOUT(patchModel->pendingCount(), 0, kSettleTimeoutMs);
     QVERIFY(!anyNonZeroHeight());
 
     // Toggle hills on: non-flat heights
     patchModel->setDebugHills(true);
     QVERIFY(patchModel->debugHills());
-    QTRY_VERIFY_WITH_TIMEOUT(anyNonZeroHeight(), 5000);
+    QTRY_VERIFY_WITH_TIMEOUT(anyNonZeroHeight(), kSettleTimeoutMs);
 
     // Toggle back off: terrain source flattens again
     patchModel->setDebugHills(false);
     QVERIFY(!patchModel->debugHills());
-    QTRY_COMPARE_WITH_TIMEOUT(patchModel->pendingCount(), 0, 5000);
+    QTRY_COMPARE_WITH_TIMEOUT(patchModel->pendingCount(), 0, kSettleTimeoutMs);
     QVERIFY(!anyNonZeroHeight());
 
     stopUI();
