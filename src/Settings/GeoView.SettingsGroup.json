@@ -4,11 +4,11 @@
     "QGC.MetaData.Facts": [
         {
             "name": "enabled",
-            "shortDesc": "Enable the experimental GeoView 2D/3D map display (preview feature).",
+            "shortDesc": "Use the experimental GeoMap 2D/3D engine for the Fly View map (preview feature).",
             "type": "bool",
             "default": false,
-            "label": "Enable GeoView (preview)",
-            "keywords": "geoview,3d map,map engine,preview,experimental"
+            "label": "Use GeoMap engine in Fly View (preview)",
+            "keywords": "geoview,geomap,3d map,map engine,preview,experimental"
         }
     ]
 }

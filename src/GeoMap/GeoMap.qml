@@ -29,6 +29,10 @@ Item {
 
     property alias camera: geoCamera
 
+    // Same contract as FlightMap: block pinch-to-zoom while virtual joystick
+    // thumbs are down (issue #13450)
+    property bool pinchZoomDisabledByVirtualJoysticks: false
+
     // Auto-centering (parity with FlightMap): one-shot GCS/vehicle centering
     // plus vehicle following, all decided by the shared MapPositionTracker
     property alias allowGCSLocationCenter: _positionTracker.allowGCSLocationCenter
@@ -484,6 +488,7 @@ Item {
         PinchHandler {
             id: pinchHandler
             target: null
+            enabled: !root.pinchZoomDisabledByVirtualJoysticks
             onActiveChanged: {
                 if (active) {
                     root.completeCameraAnimations()
