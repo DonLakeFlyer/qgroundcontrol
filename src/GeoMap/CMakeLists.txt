@@ -62,6 +62,7 @@ qt_add_qml_module(GeoMapModule
         SurfacePatchModel.h
     QML_FILES
         GeoMap.qml
+        GeoMapCircle.qml
         GeoMapFlightPath.qml
         GeoMapFWLandingPatternVisual.qml
         GeoMapLandingPatternVisuals.qml

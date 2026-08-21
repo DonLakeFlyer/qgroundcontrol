@@ -51,6 +51,27 @@ Item {
 
     readonly property string _mapTypeSetting: QGroundControl.settingsManager.flightMapSettings.mapType.rawValue
 
+    // PiP analog of FlyViewMap._adjustMapZoomForPipMode: pull the camera back
+    // 3 zoom levels in the small window for situational context, restore the
+    // full-view distance on swap back. PiP is also too small for a useful 3D
+    // view, so force 2D and restore the previous camera mode with it.
+    property real _fullViewDistance: NaN
+    property int _fullViewCameraMode: GeoMapCamera.Mode2D
+
+    onPipModeChanged: {
+        const camera = geoMapControl.camera
+        if (pipMode) {
+            _fullViewDistance = camera.distance
+            _fullViewCameraMode = camera.mode
+            camera.mode = GeoMapCamera.Mode2D
+            camera.distance = camera.distanceForZoomLevel(camera.zoomLevelForDistance(camera.distance) - 3)
+        } else if (!isNaN(_fullViewDistance)) {
+            camera.mode = _fullViewCameraMode
+            camera.distance = _fullViewDistance
+            _fullViewDistance = NaN
+        }
+    }
+
     onCenterChanged: {
         if (center && center.isValid) {
             geoMapControl.camera.center = center
@@ -74,6 +95,9 @@ Item {
     FlyViewGeoMap {
         id: geoMapControl
         anchors.fill: parent
+
+        // The PiP window is too small for free camera panning to be useful
+        keepVehicleCentered: root.pipMode || QGroundControl.settingsManager.flyViewSettings.keepMapCenteredOnVehicle.rawValue
 
         // Guided-action popup on click (FlyViewMap.onMapClicked parity).
         // 2D-only: interactive map editing is view-only in 3D (issue #14901),
@@ -101,9 +125,15 @@ Item {
     Component {
         id: mapClickDropPanelComponent
 
-        // No goto/orbit indicators yet on the GeoMap engine (issue #14901
-        // phase 2): the panel hides Orbit and skips the indicator calls
-        FlyViewMapClickDropPanel {}
+        FlyViewMapClickDropPanel {
+            gotoIndicator: geoMapControl.gotoIndicator
+            orbitIndicator: geoMapControl.orbitIndicator
+        }
+    }
+
+    ObstacleDistanceOverlayMap {
+        mapControl: root
+        showText: !root.pipMode
     }
 
     FlyViewGeoMapChrome {

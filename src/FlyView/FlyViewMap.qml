@@ -187,6 +187,7 @@ FlightMap {
 
     ObstacleDistanceOverlayMap {
         id: obstacleDistance
+        mapControl: _root
         showText: !pipMode
     }
 

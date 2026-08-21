@@ -29,6 +29,7 @@ qt_add_qml_module(FlyViewModule
         FlyViewGeoMap.qml
         FlyViewGeoMapAdapter.qml
         FlyViewGeoMapChrome.qml
+        FlyViewGeoProximityRadar.qml
         FlyViewInsetViewer.qml
         FlyViewInstrumentPanel.qml
         FlyViewGripperButton.qml
