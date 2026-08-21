@@ -74,6 +74,36 @@ Item {
     FlyViewGeoMap {
         id: geoMapControl
         anchors.fill: parent
+
+        // Guided-action popup on click (FlyViewMap.onMapClicked parity).
+        // 2D-only: interactive map editing is view-only in 3D (issue #14901),
+        // and a tilted-camera pick can land kilometers from the visual target.
+        onMapClicked: (position) => {
+            if (root.pipMode || geoMapControl.camera.mode !== GeoMapCamera.Mode2D) {
+                return
+            }
+            if (!globals.guidedControllerFlyView.guidedUIVisible &&
+                (globals.guidedControllerFlyView.showGotoLocation || globals.guidedControllerFlyView.showOrbit ||
+                 globals.guidedControllerFlyView.showROI || globals.guidedControllerFlyView.showSetHome ||
+                 globals.guidedControllerFlyView.showSetEstimatorOrigin)) {
+
+                const clickCoord = root.toCoordinate(Qt.point(position.x, position.y), false /* clipToViewPort */)
+                if (!clickCoord.isValid) {
+                    return
+                }
+                const windowPosition = root.mapToItem(globals.parent, position.x, position.y)
+                const dropPanel = mapClickDropPanelComponent.createObject(mainWindow, { mapClickCoord: clickCoord, clickRect: Qt.rect(windowPosition.x, windowPosition.y, 0, 0) })
+                dropPanel.open()
+            }
+        }
+    }
+
+    Component {
+        id: mapClickDropPanelComponent
+
+        // No goto/orbit indicators yet on the GeoMap engine (issue #14901
+        // phase 2): the panel hides Orbit and skips the indicator calls
+        FlyViewMapClickDropPanel {}
     }
 
     FlyViewGeoMapChrome {
