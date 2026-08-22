@@ -13,18 +13,16 @@ import QtQuick.Shapes
 import QGroundControl
 import QGroundControl.GeoMap
 
-/// Circle outline: the GeoMap counterpart of the QtLocation
-/// QGCMapCircleVisuals ring (outline only — no drag handles or rotation
-/// arrows). Built from great-circle points so it stays correct under 3D
-/// camera tilt. Ground-projected by default; set altitudeMode to
-/// GeoMapItem.Absolute to render at the center coordinate's altitude.
+/// Polygon outline/fill from a coordinate list: the GeoMap counterpart of
+/// QGCMapPolygonVisuals (display only — no drag-to-edit vertices).
+/// Ground-projected by default; set altitudeMode to GeoMapItem.Absolute to
+/// render at the vertex coordinates' altitude.
 Item {
     id: root
 
     property var scene
     property var surfaceModel
-    property var center                 ///< QGeoCoordinate
-    property real radiusMeters: 0
+    property var coordinates: []        ///< QGeoCoordinate vertices, unclosed ring
     property color strokeColor: QGroundControl.globalPalette.mapMissionTrajectory
     property real strokeWidth: 3
     property color fillColor: "transparent"
@@ -34,9 +32,9 @@ Item {
         id: pathProjector
         scene: root.scene
         surfaceModel: root.surfaceModel
-        // Skip the projection work entirely while hidden
-        coordinates: (root.visible && root.center && root.center.isValid && root.radiusMeters > 0)
-                     ? pathProjector.circleCoordinates(root.center, root.radiusMeters)
+        // Skip the projection work entirely while hidden; close the ring
+        coordinates: (root.visible && root.coordinates && root.coordinates.length > 2)
+                     ? root.coordinates.concat([root.coordinates[0]])
                      : []
     }
 

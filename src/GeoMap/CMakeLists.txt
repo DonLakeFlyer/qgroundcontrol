@@ -65,6 +65,7 @@ qt_add_qml_module(GeoMapModule
         GeoMapCircle.qml
         GeoMapFlightPath.qml
         GeoMapFWLandingPatternVisual.qml
+        GeoMapGeoFenceVisuals.qml
         GeoMapLandingPatternVisuals.qml
         GeoMapMissionArrow.qml
         GeoMapMissionDirectionArrows.qml
@@ -73,6 +74,7 @@ qt_add_qml_module(GeoMapModule
         GeoMapMissionLabel.qml
         GeoMapMissionPath.qml
         GeoMapPin.qml
+        GeoMapPolygon.qml
         GeoMapSegmentArrow.qml
         GeoMapVehicleItem.qml
         GeoMapVTOLLandingPatternVisual.qml

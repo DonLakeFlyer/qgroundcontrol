@@ -31,6 +31,7 @@ GeoMap {
     readonly property var _activeVehicle: QGroundControl.multiVehicleManager.activeVehicle
     readonly property var _missionController: globals.planMasterControllerFlyView ? globals.planMasterControllerFlyView.missionController : null
     readonly property var _rallyPointController: globals.planMasterControllerFlyView ? globals.planMasterControllerFlyView.rallyPointController : null
+    readonly property var _geoFenceController: globals.planMasterControllerFlyView ? globals.planMasterControllerFlyView.geoFenceController : null
     readonly property var _flyViewSettings: QGroundControl.settingsManager.flyViewSettings
 
     // DEM height minus vehicle-reported AMSL, sampled at home for the active
@@ -158,6 +159,13 @@ GeoMap {
         surfaceModel: root.surfaceModel
         missionController: root._missionController
         homeTerrainBias: root._activeVehicleHomeTerrainBias
+    }
+
+    GeoMapGeoFenceVisuals {
+        scene: root.scene
+        surfaceModel: root.surfaceModel
+        geoFenceController: root._geoFenceController
+        homePosition: root._activeVehicle && root._activeVehicle.homePosition.isValid ? root._activeVehicle.homePosition : QtPositioning.coordinate()
     }
 
     // Rally points
