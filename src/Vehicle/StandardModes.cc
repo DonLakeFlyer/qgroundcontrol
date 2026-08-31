@@ -1,6 +1,7 @@
 #include "StandardModes.h"
 #include "Vehicle.h"
 #include "QGCLoggingCategory.h"
+#include "QGCMAVLink.h"
 
 QGC_LOGGING_CATEGORY(StandardModesLog, "Vehicle.StandardModes")
 
@@ -88,7 +89,7 @@ void StandardModes::gotMessage(MAV_RESULT result, const mavlink_message_t &messa
             requestMode(availableModes.mode_index + 1);
         }
     } else {
-        qCDebug(StandardModesLog) << "Failed to retrieve available modes - REQUEST_MESSAGE:MAV_RESULT" << result;
+        qCWarning(StandardModesLog) << "Failed to retrieve available modes - REQUEST_MESSAGE:MAV_RESULT" << QGCMAVLink::mavResultToString(result);
         emit requestCompleted();
     }
 }

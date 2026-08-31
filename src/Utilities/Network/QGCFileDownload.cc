@@ -346,7 +346,7 @@ void QGCFileDownload::_onDownloadError(QNetworkReply::NetworkError code)
         break;
     }
 
-    qCWarning(QGCFileDownloadLog) << "Download error:" << errorMsg;
+    qCWarning(QGCFileDownloadLog) << "Download error:" << errorMsg << "url:" << _url.toDisplayString();
     _setErrorString(errorMsg);
 }
 

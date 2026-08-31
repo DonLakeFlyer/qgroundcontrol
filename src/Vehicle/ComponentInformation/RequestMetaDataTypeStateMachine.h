@@ -72,6 +72,7 @@ private slots:
     void _ftpDownloadProgress(float progress);
     void _httpDownloadComplete(bool success, const QString& localFile, const QString& errorMsg, bool fromCache);
     void _downloadAndTranslationComplete(QString translatedJsonTempFile, QString errorMsg);
+    void _cancelActiveDownload();
 
 private:
     ComponentInformationManager* _compMgr = nullptr;
@@ -86,6 +87,7 @@ private:
     QString* _currentFileName = nullptr;
     QString _currentCacheFileTag;
     bool _currentFileValidCrc = false;
+    QString _currentDownloadUri;
 
     QElapsedTimer _downloadStartTime;
     MetadataSource _metadataSource = MetadataSource::None;

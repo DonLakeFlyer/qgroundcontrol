@@ -233,86 +233,94 @@ Item {
             Layout.preferredHeight: filterRow.implicitHeight + _margin
             color: qgcPal.windowShade
 
-            RowLayout {
-                id: filterRow
-
+            QGCFlickable {
                 anchors.fill: parent
                 anchors.leftMargin: _margin
                 anchors.rightMargin: _margin
-                spacing: _margin * 0.75
+                contentWidth: filterRow.width
+                flickableDirection: Flickable.HorizontalFlick
 
-                QGCComboBox {
-                    id: levelCombo
+                RowLayout {
+                    id: filterRow
 
-                    model: [qsTr("All Levels"), qsTr("Debug"), qsTr("Info"), qsTr("Warning"), qsTr("Critical"), qsTr("Fatal")]
-                    sizeToContents: true
+                    // Fill the strip on wide screens, scroll horizontally on narrow ones
+                    width: Math.max(implicitWidth, parent.width)
+                    height: parent.height
+                    spacing: _margin * 0.75
 
-                    Component.onCompleted: currentIndex = LogManager.model.filterLevel + 1
-                    onActivated: index => {
-                        LogManager.model.filterLevel = index - 1;
+                    QGCComboBox {
+                        id: levelCombo
+
+                        model: [qsTr("All Levels"), qsTr("Debug"), qsTr("Info"), qsTr("Warning"), qsTr("Critical"), qsTr("Fatal")]
+                        sizeToContents: true
+
+                        Component.onCompleted: currentIndex = LogManager.model.filterLevel + 1
+                        onActivated: index => {
+                            LogManager.model.filterLevel = index - 1;
+                        }
                     }
-                }
 
-                QGCComboBox {
-                    id: categoryCombo
+                    QGCComboBox {
+                        id: categoryCombo
 
-                    model: [qsTr("All Categories")].concat(LogManager.model.categoriesList)
-                    sizeToContents: true
+                        model: [qsTr("All Categories")].concat(LogManager.model.categoriesList)
+                        sizeToContents: true
 
-                    onActivated: index => {
-                        LogManager.model.filterCategory = index === 0 ? "" : model[index];
+                        onActivated: index => {
+                            LogManager.model.filterCategory = index === 0 ? "" : model[index];
+                        }
                     }
-                }
 
-                QGCTextField {
-                    id: searchField
+                    QGCTextField {
+                        id: searchField
 
-                    Layout.fillWidth: true
-                    Layout.minimumWidth: _margin * 10
-                    placeholderText: qsTr("Search…")
+                        Layout.fillWidth: true
+                        Layout.minimumWidth: _margin * 10
+                        placeholderText: qsTr("Search…")
 
-                    onTextChanged: LogManager.model.setFilterTextDeferred(text)
-                }
-
-                QGCButton {
-                    ToolTip.text: qsTr("Regex search")
-                    ToolTip.visible: hovered
-                    checkable: true
-                    checked: LogManager.model.filterRegex
-                    text: qsTr(".*")
-
-                    onClicked: LogManager.model.filterRegex = checked
-                }
-
-                QGCLabel {
-                    color: qgcPal.colorRed
-                    font.bold: true
-                    text: qsTr("\u26A0 Disk Error")
-                    visible: LogManager.hasError
-
-                    QGCMouseArea {
-                        anchors.fill: parent
-
-                        onClicked: LogManager.clearError()
+                        onTextChanged: LogManager.model.setFilterTextDeferred(text)
                     }
-                }
 
-                QGCButton {
-                    text: qsTr("Categories")
+                    QGCButton {
+                        ToolTip.text: qsTr("Regex search")
+                        ToolTip.visible: hovered
+                        checkable: true
+                        checked: LogManager.model.filterRegex
+                        text: qsTr(".*")
 
-                    onClicked: filtersDialogFactory.open()
-                }
+                        onClicked: LogManager.model.filterRegex = checked
+                    }
 
-                QGCButton {
-                    text: qsTr("Save")
+                    QGCLabel {
+                        color: qgcPal.colorRed
+                        font.bold: true
+                        text: qsTr("\u26A0 Disk Error")
+                        visible: LogManager.hasError
 
-                    onClicked: saveFileDialog.openForSave()
-                }
+                        QGCMouseArea {
+                            anchors.fill: parent
 
-                QGCButton {
-                    text: qsTr("Clear")
+                            onClicked: LogManager.clearError()
+                        }
+                    }
 
-                    onClicked: LogManager.model.clear()
+                    QGCButton {
+                        text: qsTr("Categories")
+
+                        onClicked: filtersDialogFactory.open()
+                    }
+
+                    QGCButton {
+                        text: qsTr("Save")
+
+                        onClicked: saveFileDialog.openForSave()
+                    }
+
+                    QGCButton {
+                        text: qsTr("Clear")
+
+                        onClicked: LogManager.model.clear()
+                    }
                 }
             }
         }

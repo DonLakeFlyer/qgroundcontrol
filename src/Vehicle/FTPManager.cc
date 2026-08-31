@@ -2,6 +2,7 @@
 #include "MAVLinkProtocol.h"
 #include "AppMessages.h"
 #include "QGCLoggingCategory.h"
+#include "QGCMAVLink.h"
 #include "Vehicle.h"
 #include "VehicleLinkManager.h"
 
@@ -19,7 +20,7 @@ FTPManager::FTPManager(Vehicle* vehicle)
 {
     _ackOrNakTimeoutTimer.setSingleShot(true);
     // Mock link responds immediately if at all, speed up unit tests with faster timeout
-    _ackOrNakTimeoutTimer.setInterval(QGC::runningUnitTests() ? kTestAckTimeoutMs : _ackOrNakTimeoutMsecs);
+    _ackOrNakTimeoutTimer.setInterval(QGC::runningUnitTests() ? kTestAckTimeoutMs : QGCMAVLink::kMessageRoundTripTimeoutMs);
     connect(&_ackOrNakTimeoutTimer, &QTimer::timeout, this, &FTPManager::_ackOrNakTimeout);
 
     // Make sure we don't have bad structure packing

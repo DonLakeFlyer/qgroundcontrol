@@ -26,6 +26,9 @@ public:
 
     QString translateJsonUsingTS(const QString& toTranslateJsonFile, const QString& tsFile);
 
+    /// URL of the currently active translation file download
+    QString currentDownloadUrl() const { return _currentDownloadUrl; }
+
 signals:
     void downloadComplete(QString translatedJsonTempFile, QString errorMsg);
 
@@ -44,4 +47,5 @@ private:
 
     QGCCachedFileDownload* _cachedFileDownload = nullptr;
     QString _toTranslateJsonFile;
+    QString _currentDownloadUrl;
 };

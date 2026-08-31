@@ -4,6 +4,7 @@
 #include "MavCommandQueue.h"
 #include "AppMessages.h"
 #include "QGCLoggingCategory.h"
+#include "QGCMAVLink.h"
 #include "Vehicle.h"
 
 QGC_LOGGING_CATEGORY(RequestMessageCoordinatorLog, "Vehicle.RequestMessageCoordinator")
@@ -187,7 +188,7 @@ void RequestMessageCoordinator::handleReceivedMessage(const mavlink_message_t& m
         for (auto info : compIdEntry) {
             // Unit-test environments can have enough scheduling jitter that a 50ms
             // response deadline causes false request-message timeouts.
-            const int messageWaitTimeoutMs = QGC::runningUnitTests() ? 500 : 1000;
+            const int messageWaitTimeoutMs = QGC::runningUnitTests() ? 500 : QGCMAVLink::kMessageRoundTripTimeoutMs;
             if (info->messageWaitElapsedTimer.isValid() && info->messageWaitElapsedTimer.elapsed() > messageWaitTimeoutMs) {
                 const mavlink_message_info_t* msgInfo = mavlink_get_message_info_by_id(info->msgId);
                 QString msgName = msgInfo ? msgInfo->name : QString::number(info->msgId);

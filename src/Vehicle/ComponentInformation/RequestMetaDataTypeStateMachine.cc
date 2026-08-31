@@ -164,6 +164,13 @@ void RequestMetaDataTypeStateMachine::_wireTimeoutHandling()
     _stateRequestTranslationJson->addTransition(_stateRequestTranslationJson, &WaitStateBase::timedOut, _stateRequestTranslate);
 
     _stateRequestTranslate->addTransition(_stateRequestTranslate, &WaitStateBase::timedOut, _stateComplete);
+
+    // A timed-out state leaves its download signal connections live; a stale completion
+    // arriving later could complete a subsequent state with the wrong file. Tear down.
+    connect(_stateRequestMetaDataJson, &WaitStateBase::timedOut, this, &RequestMetaDataTypeStateMachine::_cancelActiveDownload);
+    connect(_stateRequestMetaDataJsonFallback, &WaitStateBase::timedOut, this, &RequestMetaDataTypeStateMachine::_cancelActiveDownload);
+    connect(_stateRequestTranslationJson, &WaitStateBase::timedOut, this, &RequestMetaDataTypeStateMachine::_cancelActiveDownload);
+    connect(_stateRequestTranslate, &WaitStateBase::timedOut, this, &RequestMetaDataTypeStateMachine::_cancelActiveDownload);
 }
 
 void RequestMetaDataTypeStateMachine::request(CompInfo* compInfo)
@@ -387,7 +394,7 @@ void RequestMetaDataTypeStateMachine::_requestTranslate()
                                                        typeToString())) {
         disconnect(_compMgr->translation(), &ComponentInformationTranslation::downloadComplete,
                    this, &RequestMetaDataTypeStateMachine::_downloadAndTranslationComplete);
-        qCDebug(RequestMetaDataTypeStateMachineLog) << "downloadAndTranslate() failed";
+        qCDebug(RequestMetaDataTypeStateMachineLog) << typeToString() << ": translation skipped (English locale, locale unavailable, or download failure), using untranslated metadata";
         _stateRequestTranslate->complete();
     }
 }
@@ -464,6 +471,7 @@ void RequestMetaDataTypeStateMachine::_requestFile(const QString& cacheFileTag, 
     _currentCacheFileTag = cacheFileTag;
     _currentFileName = &outputFileName;
     _currentFileValidCrc = crcValid;
+    _currentDownloadUri = uri;
     outputFileName.clear();
 
     auto completeCurrentState = [this]() {
@@ -499,7 +507,7 @@ void RequestMetaDataTypeStateMachine::_requestFile(const QString& cacheFileTag, 
         qCDebug(RequestMetaDataTypeStateMachineLog) << typeToString() << ": not found in cache, downloading";
     }
 
-    qCDebug(RequestMetaDataTypeStateMachineLog) << "Downloading json" << uri;
+    qCDebug(RequestMetaDataTypeStateMachineLog) << typeToString() << ": downloading json" << uri;
 
     if (_uriIsMAVLinkFTP(uri)) {
         if (trackMetadataSource) {
@@ -603,6 +611,24 @@ void RequestMetaDataTypeStateMachine::_httpDownloadComplete(bool success, const 
         _activeAsyncState->complete();
     } else if (_activeSkippableState) {
         _activeSkippableState->complete();
+    }
+}
+
+void RequestMetaDataTypeStateMachine::_cancelActiveDownload()
+{
+    FTPManager* ftpManager = _compInfo->vehicle->ftpManager();
+    if (disconnect(ftpManager, &FTPManager::downloadComplete, this, &RequestMetaDataTypeStateMachine::_ftpDownloadComplete)) {
+        disconnect(ftpManager, &FTPManager::commandProgress, this, &RequestMetaDataTypeStateMachine::_ftpDownloadProgress);
+        qCDebug(RequestMetaDataTypeStateMachineLog) << typeToString() << ": cancelling in-flight FTP download due to state timeout" << _currentDownloadUri;
+        ftpManager->cancelDownload();
+    }
+    if (disconnect(_compMgr->_cachedFileDownload, &QGCCachedFileDownload::finished, this, &RequestMetaDataTypeStateMachine::_httpDownloadComplete)) {
+        qCDebug(RequestMetaDataTypeStateMachineLog) << typeToString() << ": cancelling in-flight HTTP download due to state timeout" << _currentDownloadUri;
+        _compMgr->_cachedFileDownload->cancel();
+    }
+    if (disconnect(_compMgr->translation(), &ComponentInformationTranslation::downloadComplete, this, &RequestMetaDataTypeStateMachine::_downloadAndTranslationComplete)) {
+        qCDebug(RequestMetaDataTypeStateMachineLog) << typeToString() << ": cancelling in-flight translation download due to state timeout" << _compMgr->translation()->currentDownloadUrl();
+        _compMgr->_cachedFileDownload->cancel();
     }
 }
 

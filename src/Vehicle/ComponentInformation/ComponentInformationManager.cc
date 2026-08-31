@@ -242,6 +242,7 @@ void ComponentInformationManager::_signalComplete()
         _requestAllCompleteFn      = nullptr;
         _requestAllCompleteFnData  = nullptr;
     }
+    emit requestAllComplete();
 }
 
 bool ComponentInformationManager::_isCompTypeSupported(COMP_METADATA_TYPE type) const

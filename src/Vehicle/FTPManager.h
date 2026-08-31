@@ -260,7 +260,6 @@ private:
     uint16_t                _expectedIncomingSeqNumber  = 0;
     WithTimeSupport_t       _listDirWithTimeSupport     = WithTimeSupport_t::Unknown;
 
-    static const int _ackOrNakTimeoutMsecs  = 1000;
     static const int _maxRetry              = 3;
 
 public:

@@ -16,6 +16,7 @@
 #include "VehicleLinkManager.h"
 #include "LinkInterface.h"
 #include "MAVLinkProtocol.h"
+#include "QGCMAVLink.h"
 #include "QGCVideoStreamInfo.h"
 #include "MissionCommandTree.h"
 
@@ -408,7 +409,7 @@ void VehicleCameraControl::_setCameraMode(CameraMode mode)
         _cameraMode = mode;
         emit cameraModeChanged();
         //-- Update stream status
-        _streamStatusTimer.start(1000);
+        _streamStatusTimer.start(QGCMAVLink::kMessageRoundTripTimeoutMs);
     }
 }
 
@@ -781,11 +782,11 @@ void VehicleCameraControl::_mavCommandResult(int vehicleId, int component, int c
                 break;
             case MAV_CMD_VIDEO_START_CAPTURE:
                 _setVideoCaptureStatus(VIDEO_CAPTURE_STATUS_RUNNING);
-                _captureStatusTimer.start(1000);
+                _captureStatusTimer.start(QGCMAVLink::kMessageRoundTripTimeoutMs);
                 break;
             case MAV_CMD_VIDEO_STOP_CAPTURE:
                 _setVideoCaptureStatus(VIDEO_CAPTURE_STATUS_STOPPED);
-                _captureStatusTimer.start(1000);
+                _captureStatusTimer.start(QGCMAVLink::kMessageRoundTripTimeoutMs);
                 break;
             case MAV_CMD_REQUEST_CAMERA_CAPTURE_STATUS:
                 _cameraCaptureStatusRetries = 0;
@@ -794,7 +795,7 @@ void VehicleCameraControl::_mavCommandResult(int vehicleId, int component, int c
                 _storageInfoRetries = 0;
                 break;
             case MAV_CMD_IMAGE_START_CAPTURE:
-                _captureStatusTimer.start(1000);
+                _captureStatusTimer.start(QGCMAVLink::kMessageRoundTripTimeoutMs);
                 break;
             case MAV_CMD_SET_CAMERA_ZOOM:
             case MAV_CMD_SET_CAMERA_FOCUS:
@@ -817,7 +818,7 @@ void VehicleCameraControl::_mavCommandResult(int vehicleId, int component, int c
                 case MAV_CMD_IMAGE_START_CAPTURE:
                 case MAV_CMD_IMAGE_STOP_CAPTURE:
                     if(++_captureInfoRetries <= 5) {
-                        _captureStatusTimer.start(1000);
+                        _captureStatusTimer.start(QGCMAVLink::kMessageRoundTripTimeoutMs);
                     } else {
                         qCDebug(VehicleCameraControlLog) << "Giving up start/stop image capture";
                         _setPhotoCaptureStatus(PHOTO_CAPTURE_IDLE);
@@ -825,14 +826,14 @@ void VehicleCameraControl::_mavCommandResult(int vehicleId, int component, int c
                     break;
                 case MAV_CMD_REQUEST_CAMERA_CAPTURE_STATUS:
                     if(++_cameraCaptureStatusRetries <= 5) {
-                        _captureStatusTimer.start(1000);
+                        _captureStatusTimer.start(QGCMAVLink::kMessageRoundTripTimeoutMs);
                     } else {
                         qCDebug(VehicleCameraControlLog) << "Giving up requesting capture status";
                     }
                     break;
                 case MAV_CMD_REQUEST_STORAGE_INFORMATION:
                     if(++_storageInfoRetries <= 5) {
-                        QTimer::singleShot(1000, this, &VehicleCameraControl::_requestStorageInfo);
+                        QTimer::singleShot(QGCMAVLink::kMessageRoundTripTimeoutMs, this, &VehicleCameraControl::_requestStorageInfo);
                     } else {
                         qCDebug(VehicleCameraControlLog) << "Giving up requesting storage status";
                     }
@@ -1541,7 +1542,7 @@ void VehicleCameraControl::_requestCameraSettings()
         } else {
             qCDebug(VehicleCameraControlLog) << "_requestCameraSettings() - starting timer";
         }
-        _cameraSettingsTimer.start(1000);               // Wait up to a second for it
+        _cameraSettingsTimer.start(QGCMAVLink::kMessageRoundTripTimeoutMs);    // Wait for response
     }
 
 }
@@ -1570,7 +1571,7 @@ void VehicleCameraControl::_requestStorageInfo()
                 1);                                     // Do Request
         }
         qCDebug(VehicleCameraControlLog) << "_requestStorageInfo() - starting timer";
-        _storageInfoTimer.start(1000);                  // Wait up to a second for it
+        _storageInfoTimer.start(QGCMAVLink::kMessageRoundTripTimeoutMs);       // Wait for response
     }
 }
 
@@ -1674,7 +1675,7 @@ void VehicleCameraControl::handleCameraCaptureStatus(const mavlink_camera_captur
         _captureStatusTimer.start(5000);
     //-- Same while (single) image capture is busy
     } else if(_photoCaptureStatus() != PHOTO_CAPTURE_IDLE && photoCaptureMode() == PHOTO_CAPTURE_SINGLE) {
-        _captureStatusTimer.start(1000);
+        _captureStatusTimer.start(QGCMAVLink::kMessageRoundTripTimeoutMs);
     }
     //-- Time Lapse
     if(_photoCaptureStatus() == PHOTO_CAPTURE_INTERVAL_IDLE || _photoCaptureStatus() == PHOTO_CAPTURE_INTERVAL_IN_PROGRESS) {
@@ -1717,7 +1718,7 @@ void VehicleCameraControl::handleVideoStreamInformation(const mavlink_video_stre
     }
     //-- Check for missing count
     if(_streams.count() < _expectedCount) {
-        _streamInfoTimer.start(1000);
+        _streamInfoTimer.start(QGCMAVLink::kMessageRoundTripTimeoutMs);
     } else if (_streamInfoTimer.isActive()) {
         //-- Done
         qCDebug(VehicleCameraControlLog) << "All stream handlers done";
@@ -1925,7 +1926,7 @@ void VehicleCameraControl::_requestStreamInfo(uint8_t streamID)
             false,                                              // ShowError
             streamID);                                          // Stream ID
     }
-    _streamInfoTimer.start(1000);                           // Wait up to a second for it
+    _streamInfoTimer.start(QGCMAVLink::kMessageRoundTripTimeoutMs);            // Wait for response
 }
 
 void VehicleCameraControl::_requestStreamStatus(uint8_t streamID)
@@ -1949,7 +1950,7 @@ void VehicleCameraControl::_requestStreamStatus(uint8_t streamID)
             false,                                              // ShowError
             streamID);                                          // Stream ID
     }
-    _streamStatusTimer.start(1000);                         // Wait up to a second for it
+    _streamStatusTimer.start(QGCMAVLink::kMessageRoundTripTimeoutMs);          // Wait for response
 }
 
 QGCVideoStreamInfo*

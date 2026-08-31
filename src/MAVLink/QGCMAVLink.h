@@ -36,6 +36,9 @@ public:
     // VehicleClassGeneric inherited from QGCMAVLinkTypes
     static_assert(QGCMAVLinkTypes::VehicleClassGeneric == MAV_TYPE_GENERIC, "VehicleClassGeneric value mismatch");
 
+    /// Standard timeout for a single message round trip, sized for slow telemetry links
+    static constexpr int kMessageRoundTripTimeoutMs = 3000;
+
     static bool                     isPX4FirmwareClass          (MAV_AUTOPILOT autopilot) { return autopilot == MAV_AUTOPILOT_PX4; }
     static bool                     isArduPilotFirmwareClass    (MAV_AUTOPILOT autopilot) { return autopilot == MAV_AUTOPILOT_ARDUPILOTMEGA; }
     static bool                     isGenericFirmwareClass      (MAV_AUTOPILOT autopilot) { return !isPX4FirmwareClass(autopilot) && ! isArduPilotFirmwareClass(autopilot); }

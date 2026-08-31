@@ -66,22 +66,26 @@ void InitialConnectStateMachine::_createStates()
     });
 
     // State 1: Request standard modes
+    // No timeout: download duration varies too much with link speed and mode count.
+    // The standard modes protocol handles all timeouts internally and always signals completion.
     _stateStandardModes = new AsyncFunctionState(
         QStringLiteral("RequestStandardModes"),
         this,
-        [this](AsyncFunctionState* state) { _requestStandardModes(state); },
-        _timeoutStandardModes
+        [this](AsyncFunctionState* state) { _requestStandardModes(state); }
     );
 
     // State 2: Request component information
+    // No timeout: ComponentInformationManager's nested state machines have per-state
+    // timeouts on every step and always signal completion.
     _stateCompInfo = new AsyncFunctionState(
         QStringLiteral("RequestCompInfo"),
         this,
-        [this](AsyncFunctionState* state) { _requestCompInfo(state); },
-        _timeoutCompInfo
+        [this](AsyncFunctionState* state) { _requestCompInfo(state); }
     );
 
     // State 3: Request parameters (skippable)
+    // No timeout: download duration varies too much with link speed and param count.
+    // ParameterManager handles all timeouts internally and always signals completion.
     _stateParameters = new SkippableAsyncState(
         QStringLiteral("RequestParameters"),
         this,
@@ -100,8 +104,7 @@ void InitialConnectStateMachine::_createStates()
         [this]() {
             qCDebug(InitialConnectStateMachineLog) << "Skipping parameter download" << _lastSkipReason;
             vehicle()->_parameterManager->setParameterDownloadSkipped(true);
-        },
-        _timeoutParameters
+        }
     );
 
     // State 4: Request mission (skippable)
@@ -235,15 +238,6 @@ void InitialConnectStateMachine::_wireTimeoutHandling()
     // Note: _stateAutopilotVersion is RetryableRequestMessageState which handles its own retry
 
     // Use addRetryTransition builder for cleaner timeout handling
-    addRetryTransition(_stateStandardModes, &WaitStateBase::timedOut, _stateCompInfo,
-                       [this]() { _requestStandardModes(_stateStandardModes); }, _maxRetries);
-
-    addRetryTransition(_stateCompInfo, &WaitStateBase::timedOut, _stateParameters,
-                       [this]() { _requestCompInfo(_stateCompInfo); }, _maxRetries);
-
-    addRetryTransition(_stateParameters, &WaitStateBase::timedOut, _stateMission,
-                       [this]() { _requestParameters(_stateParameters); }, _maxRetries);
-
     addRetryTransition(_stateMission, &WaitStateBase::timedOut, _stateGeoFence,
                        [this]() { _requestMission(_stateMission); }, _maxRetries);
 
@@ -406,15 +400,8 @@ void InitialConnectStateMachine::_requestCompInfo(AsyncFunctionState* state)
                    this, &InitialConnectStateMachine::_onSubProgressUpdate);
     });
 
-    vehicle()->_componentInformationManager->requestAllComponentInformation(
-        [](void* requestAllCompleteFnData) {
-            auto* self = static_cast<InitialConnectStateMachine*>(requestAllCompleteFnData);
-            if (self->_stateCompInfo) {
-                self->_stateCompInfo->complete();
-            }
-        },
-        this
-    );
+    state->connectToCompletion(vehicle()->_componentInformationManager, &ComponentInformationManager::requestAllComplete);
+    vehicle()->_componentInformationManager->requestAllComponentInformation(nullptr, nullptr);
 }
 
 void InitialConnectStateMachine::_requestParameters(SkippableAsyncState* state)

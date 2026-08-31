@@ -35,6 +35,7 @@ bool ComponentInformationTranslation::downloadAndTranslate(const QString& summar
     if (url.isEmpty()) {
         return false;
     }
+    _currentDownloadUrl = url;
 
     // Download file
     connect(_cachedFileDownload, &QGCCachedFileDownload::finished, this, &ComponentInformationTranslation::onDownloadCompleted);
