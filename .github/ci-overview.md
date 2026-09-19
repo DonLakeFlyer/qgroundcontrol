@@ -104,10 +104,21 @@ The managed image and Windows warm-pool routes are opt-in repository settings. W
 standard RunsOn runner. See the [runner image guide](runner-images/README.md) for AWS prerequisites,
 activation, rebuild cadence, and the organization-level warm-pool example.
 
+### Release tags
+
+Platform workflows trigger on `push` of tags matching `v[0-9]+.[0-9]+.[0-9]+` only. Release tags
+are cut on `Stable_V*` branches. `_detect-changes.yml` sets `should_build=false` for a release tag
+whose commit is not reachable from an `origin/Stable*` branch; every platform and Docker build job
+gates on that output, so nothing is built, signed, or pushed (TestFlight, Play Store, Docker Hub).
+`aws-upload` independently refuses to publish such a tag to the S3 `latest/` folder or invalidate
+CloudFront. Both checks run `tag_on_stable.py`, which fails the job if git cannot answer.
+Version-marker tags on `master` (e.g. `v5.2.0-dev`, consumed by `git describe` for daily-build
+version numbers) do not match the trigger glob and never start a build.
+
 ### TestFlight releases
 
 `ios.yml` builds a Release device bundle and a Debug x86_64 simulator bundle. Pull-request and
-branch builds remain unsigned. A `v*` tag selects the Xcode App Store preset, imports an Apple
+branch builds remain unsigned. A release tag selects the Xcode App Store preset, imports an Apple
 Distribution certificate and provisioning profile, verifies the signed bundle, packages an IPA,
 and uploads it to TestFlight.
 
@@ -208,6 +219,7 @@ Python helpers in `.github/scripts/` invoked by workflows and composite actions.
 | `report_context.py` | Reject stale PR/default-branch reporting contexts |
 | `resolve_gstreamer_config.py` | Pick the platform-specific GStreamer version from build-config outputs |
 | `size_analysis.py` | Analyze binary size changes |
+| `tag_on_stable.py` | Report whether a pushed release tag is reachable from a `Stable*` branch |
 | `test_duration_report.py` | Generate test-duration reports and regressions |
 | `verify_coverage_thresholds.py` | Verify `coverage.xml` meets line and branch coverage thresholds |
 | `verify_executable.py` | Verify the QGroundControl executable with a boot test |
