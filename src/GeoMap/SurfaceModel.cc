@@ -12,13 +12,16 @@
 #include <utility>
 #include <vector>
 
+#include "FlyViewSettings.h"
 #include "GeoMapCamera.h"
 #include "HeightField.h"
 #include "HeightSource.h"
 #include "QGCLoggingCategory.h"
+#include "SettingsManager.h"
 
 QGC_LOGGING_CATEGORY(GeoMapSurfaceModelLog, "GeoMap.SurfaceModel")
 QGC_LOGGING_CATEGORY(GeoMapSurfaceModelVerboseLog, "GeoMap.SurfaceModel.Verbose")
+QGC_LOGGING_CATEGORY(GeoMapSurfaceModelCliffsLog, "GeoMap.SurfaceModel.Cliffs")
 
 namespace {
 
@@ -56,6 +59,7 @@ SurfaceModel::SurfaceModel(GeoMapCamera* camera, HeightSource* heightSource, Hei
     : QObject(parent), _camera(camera), _heightSource(heightSource), _field(field)
 {
     qRegisterMetaType<TileMath::TileKey>();
+    _cliffClock.start();
 
     connect(_field, &HeightField::regionChanged, this, &SurfaceModel::_fieldRegionChanged);
 
@@ -156,8 +160,7 @@ SurfaceModel::AddResult SurfaceModel::_addDesiredPatches(const QList<TileMath::T
             continue;
         }
         PatchData data;
-        data.heights = _field->samplePatch(key, kGridSize);
-        data.maxHeight = maxHeightOf(data.heights);
+        _samplePatch(key, data);
         _patches.insert(key, std::move(data));
         churnRects.append(patchRect(key));
         _heightSource->requestTile(key);
@@ -211,6 +214,10 @@ int SurfaceModel::_removeStalePatches(const QList<TileMath::TileKey>& desired,
             continue;
         }
         const TileMath::TileKey removedKey = it.key();
+        if (it.value().cliffSinceMs >= 0) {
+            qCWarning(GeoMapSurfaceModelCliffsLog) << "cliff removed with patch" << removedKey << "after"
+                                                   << (_cliffClock.elapsed() - it.value().cliffSinceMs) << "ms";
+        }
         it = _patches.erase(it);
         churnRects.append(patchRect(removedKey));
         emit patchRemoved(removedKey);
@@ -474,9 +481,7 @@ void SurfaceModel::_fieldRegionChanged(const QRectF& worldRect)
         if (!patchTouchesRegion(it.key(), worldRect)) {
             continue;
         }
-        PatchData& data = it.value();
-        data.heights = _field->samplePatch(it.key(), kGridSize);
-        data.maxHeight = maxHeightOf(data.heights);
+        _samplePatch(it.key(), it.value());
         emit patchMeshChanged(it.key());
         remeshed++;
     }
@@ -487,5 +492,37 @@ void SurfaceModel::_fieldRegionChanged(const QRectF& worldRect)
     // the camera: re-cull terrain-aware
     if (_maxTerrainZ() > (_culledTerrainZ + kRecullHeightMargin)) {
         _scheduleUpdate();
+    }
+}
+
+void SurfaceModel::_samplePatch(const TileMath::TileKey& key, PatchData& data)
+{
+    const bool monitorCliffs = SettingsManager::instance()->flyViewSettings()->geoMapDebugUI()->rawValue().toBool();
+    PatchSampler::EdgeStep edgeStep;
+    data.heights = _field->samplePatch(key, kGridSize, monitorCliffs ? &edgeStep : nullptr);
+    data.maxHeight = maxHeightOf(data.heights);
+    if (!monitorCliffs) {
+        data.cliffSinceMs = -1;
+        return;
+    }
+
+    const bool cliff = edgeStep.step >= kCliffLogThreshold;
+    if (cliff && (data.cliffSinceMs < 0)) {
+        data.cliffSinceMs = _cliffClock.elapsed();
+        const QChar edge = (edgeStep.row == 0)           ? QLatin1Char('N')
+                           : (edgeStep.row == kGridSize) ? QLatin1Char('S')
+                           : (edgeStep.col == 0)         ? QLatin1Char('W')
+                                                         : QLatin1Char('E');
+        const QRectF rect = patchRect(key);
+        const double cell = rect.width() / kGridSize;
+        const QPointF world(rect.left() + (edgeStep.col * cell), (rect.top() + rect.height()) - (edgeStep.row * cell));
+        qCWarning(GeoMapSurfaceModelCliffsLog)
+            << "cliff appeared: patch" << key << "edge" << edge << "step" << edgeStep.step << "m"
+            << "at" << TileMath::worldToGeo(world) << "own zoom" << edgeStep.ownZoom << "boundary zoom"
+            << edgeStep.boundaryZoom;
+    } else if (!cliff && (data.cliffSinceMs >= 0)) {
+        qCWarning(GeoMapSurfaceModelCliffsLog)
+            << "cliff cleared: patch" << key << "after" << (_cliffClock.elapsed() - data.cliffSinceMs) << "ms";
+        data.cliffSinceMs = -1;
     }
 }

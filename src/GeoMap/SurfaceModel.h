@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include <QtCore/QElapsedTimer>
 #include <QtCore/QHash>
 #include <QtCore/QList>
 #include <QtCore/QObject>
@@ -150,9 +151,15 @@ private slots:
 private:
     struct PatchData
     {
-        QList<float> heights;    ///< cached field samples; refreshed on add and regionChanged
-        float maxHeight = 0.0f;  ///< cached vertex max so _maxTerrainZ is O(patches) not O(vertices)
+        QList<float> heights;      ///< cached field samples; refreshed on add and regionChanged
+        float maxHeight = 0.0f;    ///< cached vertex max so _maxTerrainZ is O(patches) not O(vertices)
+        qint64 cliffSinceMs = -1;  ///< cliff monitor: when the current edge cliff appeared; -1 = none
     };
+
+    /// Cliff monitor threshold: in-patch edge steps at or above this are logged
+    static constexpr float kCliffLogThreshold = 5.0f;
+
+    void _samplePatch(const TileMath::TileKey& key, PatchData& data);
 
     double _projectedPixels(const TileMath::TileKey& key, const QPointF& cameraGround, double cameraHeight) const;
     QList<TileMath::TileKey> _desiredPatches(const QRectF& visible, const QPointF& cameraGround,
@@ -184,4 +191,5 @@ private:
     bool _addsDeferred = false;      ///< the last pass hit the add cap; a follow-up pass is queued
     bool _removalsDeferred = false;  ///< the last pass hit the removal cap; a follow-up pass is queued
     double _culledTerrainZ = 0.0;    ///< terrain-top height assumed by the last cull (scene units)
+    QElapsedTimer _cliffClock;
 };

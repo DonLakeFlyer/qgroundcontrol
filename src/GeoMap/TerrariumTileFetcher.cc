@@ -13,7 +13,9 @@
 #include <QtNetwork/QNetworkAccessManager>
 #include <QtNetwork/QNetworkReply>
 
+#include <algorithm>
 #include <memory>
+#include <utility>
 
 #include "BilinearUV.h"
 #include "ElevationMapProvider.h"
@@ -111,6 +113,16 @@ TileMath::TileKey fetchKeyFor(const TileMath::TileKey& key)
     return TileMath::TileKey{key.x >> shift, key.y >> shift, TerrariumTileFetcher::kMaxTileZoom};
 }
 
+/// kAnchorZoom ancestor of a fetched tile; invalid when the tile is already that coarse
+TileMath::TileKey anchorKeyFor(const TileMath::TileKey& fetchKey)
+{
+    if (fetchKey.zoom <= TerrariumTileFetcher::kAnchorZoom) {
+        return TileMath::TileKey{0, 0, -1};
+    }
+    const int shift = fetchKey.zoom - TerrariumTileFetcher::kAnchorZoom;
+    return TileMath::TileKey{fetchKey.x >> shift, fetchKey.y >> shift, TerrariumTileFetcher::kAnchorZoom};
+}
+
 }  // namespace
 
 TerrariumTileFetcher::TerrariumTileFetcher(QObject* parent, QNetworkAccessManager* networkManager)
@@ -183,8 +195,14 @@ bool TerrariumTileFetcher::requestTile(const TileMath::TileKey& key)
     }
 
     const TileMath::TileKey fetchKey = fetchKeyFor(key);
-    if (_heightField->hasTile(fetchKey) || _fieldRequests.contains(fetchKey)) {
+    if (_heightField->hasTile(fetchKey) || _fieldRequests.contains(fetchKey) || _isHeld(fetchKey)) {
         return true;
+    }
+
+    // Anchor first: its fetch queues ahead, and _deliverAll holds this tile until it lands
+    const TileMath::TileKey anchor = anchorKeyFor(fetchKey);
+    if (TileMath::isValidKey(anchor)) {
+        (void) requestTile(anchor);
     }
 
     const bool inFlight = _fetchInFlight(fetchKey);
@@ -341,7 +359,7 @@ void TerrariumTileFetcher::_deliverAll(const TileMath::TileKey& fetchKey, const 
 {
     const bool forField = _fieldRequests.remove(fetchKey) && _heightField;
     if (forField) {
-        _heightField->insertTile(fetchKey, gridFromImage(image));
+        _insertIntoField(fetchKey, gridFromImage(image));
     }
 
     const QList<int> requestIds = _waiters.take(fetchKey);
@@ -359,6 +377,12 @@ void TerrariumTileFetcher::_failAll(const TileMath::TileKey& fetchKey, const QSt
     // A failed tile inserts nothing: the field keeps its current estimate, and
     // clearing the in-flight key lets a later request retry
     _fieldRequests.remove(fetchKey);
+    if (_heldForAnchor.contains(fetchKey)) {
+        // Better fine data with a cliff risk than none at all
+        qCDebug(GeoMapTerrariumTileFetcherLog)
+            << "anchor" << fetchKey << "failed, releasing" << _heldForAnchor.value(fetchKey).count() << "held tiles";
+        _releaseHeld(fetchKey);
+    }
 
     const QList<int> requestIds = _waiters.take(fetchKey);
     if (_shouldWarnFailure()) {
@@ -382,6 +406,35 @@ bool TerrariumTileFetcher::_shouldWarnFailure()
     }
     _failureWarnTimer.restart();
     return true;
+}
+
+void TerrariumTileFetcher::_insertIntoField(const TileMath::TileKey& fetchKey, ElevationTilePyramid::Grid grid)
+{
+    const TileMath::TileKey anchor = anchorKeyFor(fetchKey);
+    if (TileMath::isValidKey(anchor) && !_heightField->hasTile(anchor) && _fieldRequests.contains(anchor)) {
+        qCDebug(GeoMapTerrariumTileFetcherVerboseLog) << "holding tile" << fetchKey << "until anchor" << anchor;
+        _heldForAnchor[anchor].append(HeldTile{fetchKey, std::move(grid)});
+        return;
+    }
+    _heightField->insertTile(fetchKey, std::move(grid));
+    _releaseHeld(fetchKey);
+}
+
+void TerrariumTileFetcher::_releaseHeld(const TileMath::TileKey& anchor)
+{
+    QList<HeldTile> held = _heldForAnchor.take(anchor);
+    for (HeldTile& tile : held) {
+        _heightField->insertTile(tile.key, std::move(tile.grid));
+    }
+}
+
+bool TerrariumTileFetcher::_isHeld(const TileMath::TileKey& fetchKey) const
+{
+    const auto it = _heldForAnchor.constFind(anchorKeyFor(fetchKey));
+    if (it == _heldForAnchor.cend()) {
+        return false;
+    }
+    return std::any_of(it->cbegin(), it->cend(), [&fetchKey](const HeldTile& tile) { return tile.key == fetchKey; });
 }
 
 void TerrariumTileFetcher::_deliver(int requestId, const QImage& image)

@@ -19,12 +19,14 @@ double PatchSampler::heightAtUV(const ElevationTilePyramid::Grid& grid, double u
     return bilinearAtUV(grid.width, grid.height, u, v, at);
 }
 
-PatchSampler::PatchSampler(const ElevationTilePyramid& pyramid, const TileMath::TileKey& key, int gridSize)
+PatchSampler::PatchSampler(const ElevationTilePyramid& pyramid, const TileMath::TileKey& key, int gridSize,
+                           EdgeStep* edgeStep)
     : _pyramid(pyramid),
       _key(key),
       _gridSize(gridSize),
       _shiftToMax(TileMath::kMaxZoom - key.zoom),
-      _patchView(pyramid.bestTileFor(key))
+      _patchView(pyramid.bestTileFor(key)),
+      _edgeStep(edgeStep)
 {}
 
 QList<float> PatchSampler::sample()
@@ -101,9 +103,31 @@ float PatchSampler::_boundaryHeight(qint64 n, qint64 m)
         for (int xi = 0; xi < xCount; xi++) {
             const ElevationTilePyramid::View view = _resolveCell(xCells[xi], yCells[yi]);
             if (view.isValid()) {
-                return _viewHeight(view, n, m);
+                const float height = _viewHeight(view, n, m);
+                if (_edgeStep) {
+                    _trackEdgeStep(view, height, n, m);
+                }
+                return height;
             }
         }
     }
     return 0.0f;  // no stored data touches the vertex: every sharer agrees on zero
+}
+
+void PatchSampler::_trackEdgeStep(const ElevationTilePyramid::View& view, float height, qint64 n, qint64 m)
+{
+    // Same-zoom neighbors differ only by edge clamping of real data: not a cliff
+    if (_patchView.isValid() && (view.key.zoom == _patchView.key.zoom)) {
+        return;
+    }
+    const float own = _patchView.isValid() ? _viewHeight(_patchView, n, m) : 0.0f;
+    const float step = std::abs(height - own);
+    if (!(step > _edgeStep->step)) {
+        return;  // also rejects NaN
+    }
+    _edgeStep->step = step;
+    _edgeStep->row = int(m - (qint64(_key.y) * _gridSize));
+    _edgeStep->col = int(n - (qint64(_key.x) * _gridSize));
+    _edgeStep->ownZoom = _patchView.isValid() ? _patchView.key.zoom : -1;
+    _edgeStep->boundaryZoom = view.key.zoom;
 }

@@ -23,7 +23,21 @@
 class PatchSampler
 {
 public:
-    PatchSampler(const ElevationTilePyramid& pyramid, const TileMath::TileKey& key, int gridSize);
+    /// Largest gap between a boundary vertex resolved from a different-zoom tile
+    /// (typically a neighbor's) and the patch's own view at that vertex: the
+    /// step the mesh draws one cell inside the edge
+    struct EdgeStep
+    {
+        float step = 0.0f;      ///< meters
+        int row = 0;            ///< vertex of the largest gap
+        int col = 0;
+        int ownZoom = -1;       ///< zoom of the patch's backing tile; -1 = no data (interior renders 0)
+        int boundaryZoom = -1;  ///< zoom of the tile the boundary vertex resolved to
+    };
+
+    /// \a edgeStep, when set, receives the patch's largest EdgeStep
+    PatchSampler(const ElevationTilePyramid& pyramid, const TileMath::TileKey& key, int gridSize,
+                 EdgeStep* edgeStep = nullptr);
 
     /// The (gridSize+1)^2 vertex heights, row-major from the NW corner
     QList<float> sample();
@@ -35,6 +49,7 @@ public:
 private:
     float _viewHeight(const ElevationTilePyramid::View& view, qint64 n, qint64 m) const;
     float _boundaryHeight(qint64 n, qint64 m);
+    void _trackEdgeStep(const ElevationTilePyramid::View& view, float height, qint64 n, qint64 m);
     ElevationTilePyramid::View _resolveCell(qint64 cx, qint64 cy);
     int _touchingCells(qint64 s, qint64 (&cells)[2]) const;
 
@@ -55,5 +70,6 @@ private:
     const int _gridSize;
     const int _shiftToMax;
     const ElevationTilePyramid::View _patchView;
+    EdgeStep* const _edgeStep;
     QVarLengthArray<TileMemo, 9> _memos;
 };

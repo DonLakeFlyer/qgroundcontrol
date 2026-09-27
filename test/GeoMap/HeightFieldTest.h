@@ -19,6 +19,10 @@ private slots:
     void _sharedEdgeIdentityAcrossBackingTiles();
     void _sharedEdgeIdentityFineNextToAncestorBacked();
     void _crossZoomVertexIdentity();
+    void _edgeStepFineNextToAncestorBacked();
+    void _edgeStepNoDataInterior();
+    void _edgeStepNoneForSharedBacking();
+    void _edgeStepNoneForSameZoomNeighbors();
     void _regionChangedOnInsert();
     void _noRegionChangedOnRejectedInsert();
     void _heightAtMemoAvoidsRepeatLookups();

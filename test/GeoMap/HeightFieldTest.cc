@@ -262,6 +262,63 @@ void HeightFieldTest::_crossZoomVertexIdentity()
     }
 }
 
+void HeightFieldTest::_edgeStepFineNextToAncestorBacked()
+{
+    HeightField field;
+    QVERIFY(field.insertTile(TileKey{0, 0, 0}, uniformGrid(100.0f)));
+    QVERIFY(field.insertTile(TileKey{6, 6, 3}, uniformGrid(200.0f)));
+
+    // A's east edge canonically takes B's exact tile while A's interior
+    // samples the z0 ancestor: a 100 m step inside A along that edge
+    const int gridSize = 4;
+    PatchSampler::EdgeStep edgeStep;
+    field.samplePatch(TileKey{5, 6, 3}, gridSize, &edgeStep);
+    QCOMPARE(edgeStep.step, 100.0f);
+    QCOMPARE(edgeStep.col, gridSize);
+    QCOMPARE(edgeStep.ownZoom, 0);
+    QCOMPARE(edgeStep.boundaryZoom, 3);
+}
+
+void HeightFieldTest::_edgeStepNoDataInterior()
+{
+    HeightField field;
+    QVERIFY(field.insertTile(TileKey{6, 6, 3}, uniformGrid(200.0f)));
+
+    // A has no data at all (interior renders 0) but its east edge copies B
+    const int gridSize = 4;
+    PatchSampler::EdgeStep edgeStep;
+    field.samplePatch(TileKey{5, 6, 3}, gridSize, &edgeStep);
+    QCOMPARE(edgeStep.step, 200.0f);
+    QCOMPARE(edgeStep.col, gridSize);
+    QCOMPARE(edgeStep.ownZoom, -1);
+    QCOMPARE(edgeStep.boundaryZoom, 3);
+}
+
+void HeightFieldTest::_edgeStepNoneForSharedBacking()
+{
+    HeightField field;
+    QVERIFY(field.insertTile(TileKey{0, 0, 0}, gradientGrid()));
+
+    // Every vertex resolves to the same z0 tile: nothing to step between
+    PatchSampler::EdgeStep edgeStep;
+    field.samplePatch(TileKey{5, 6, 3}, 4, &edgeStep);
+    QCOMPARE(edgeStep.step, 0.0f);
+    QCOMPARE(edgeStep.boundaryZoom, -1);
+}
+
+void HeightFieldTest::_edgeStepNoneForSameZoomNeighbors()
+{
+    HeightField field;
+    QVERIFY(field.insertTile(TileKey{5, 6, 3}, gradientGrid()));
+    QVERIFY(field.insertTile(TileKey{6, 6, 3}, transposedGradientGrid()));
+
+    // Adjacent exact tiles of the same zoom differ only by edge clamping: real data both sides, not a cliff
+    PatchSampler::EdgeStep edgeStep;
+    field.samplePatch(TileKey{5, 6, 3}, 4, &edgeStep);
+    QCOMPARE(edgeStep.step, 0.0f);
+    QCOMPARE(edgeStep.boundaryZoom, -1);
+}
+
 void HeightFieldTest::_regionChangedOnInsert()
 {
     HeightField field;

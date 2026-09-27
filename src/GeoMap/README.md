@@ -32,7 +32,10 @@ encoded as "terrarium" PNGs, addressed exactly like map tiles (z/x/y, available 
 zoom 15; requests above z15 are satisfied from the z15 ancestor, so imagery keeps
 refining past the elevation ceiling). `TerrariumTileFetcher` fetches them
 cache-first: it checks QGC's shared tile database, falls back to the network on a
-miss, and stores fetched tiles back into the cache.
+miss, and stores fetched tiles back into the cache. Every tile finer than z10 also
+fetches its z10 ancestor, and is held back until that ancestor is in the field, so
+fine data never lands next to a region with no data at all (which would render at
+0 m and draw a cliff).
 
 Decoded tiles land in the `HeightField`, which presents **one continuous
 heightfield**: it can answer "how high is the ground here?" for *any* position —
@@ -88,7 +91,10 @@ Each patch renders as a `Model` combining:
 
 `SurfaceAnalysis` is a diagnostic pass over the live patch set (coverage holes,
 boundary seams, camera-below-surface), invoked via
-`SurfacePatchModel::analyzeSurface()`.
+`SurfacePatchModel::analyzeSurface()`. With the GeoMap debug UI on, `SurfaceModel`
+also warns (`GeoMap.SurfaceModel.Cliffs`) each time an in-patch edge step — a
+boundary vertex resolved from different elevation data than the patch interior —
+appears, clears, or leaves with its patch.
 
 ## Scene and camera
 
