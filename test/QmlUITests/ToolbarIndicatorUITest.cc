@@ -2,12 +2,16 @@
 
 #include <QtCore/QPointer>
 #include <QtCore/QRegularExpression>
+#include <QtCore/QScopeGuard>
 #include <QtQuick/QQuickItem>
 #include <QtQuick/QQuickWindow>
 #include <QtTest/QTest>
 
+#include "AppSettings.h"
+#include "Fact.h"
 #include "MockConfiguration.h"
 #include "MockLink.h"
+#include "SettingsManager.h"
 #include "Vehicle.h"
 
 UT_REGISTER_TEST(ToolbarIndicatorUITest, TestLabel::Integration)
@@ -148,7 +152,7 @@ void ToolbarIndicatorUITest::_testEmergencyStopReplacesDisarmInFlight_data()
     QTest::addRow("multirotor flying") << int(MAV_AUTOPILOT_PX4) << int(MAV_TYPE_QUADROTOR) << true << true;
     // Classified as a generic vehicle, not a multirotor
     QTest::addRow("dodecarotor flying") << int(MAV_AUTOPILOT_PX4) << int(MAV_TYPE_DODECAROTOR) << true << true;
-    // Rover reports flying while armed and moving, but accepts a normal disarm
+    // Rover is underway while armed and moving, but accepts a normal disarm
     QTest::addRow("rover moving") << int(MAV_AUTOPILOT_ARDUPILOTMEGA) << int(MAV_TYPE_GROUND_ROVER) << true << false;
 }
 
@@ -172,7 +176,7 @@ void ToolbarIndicatorUITest::_testEmergencyStopReplacesDisarmInFlight()
         },
         [&](QPointer<MockLink> /*mockLink*/, Vehicle* vehicle) {
             if (takeoff) {
-                // The flying transition creates QGCPressure, which warns on hosts without a pressure backend
+                // The airborne transition creates QGCPressure, which warns on hosts without a pressure backend
                 ignoreLogMessage("Utilities.QGCSensors", QtWarningMsg,
                                  QRegularExpression(QStringLiteral("Failed to connect to pressure backend")));
                 ignoreLogMessage("Utilities.QGCSensors", QtWarningMsg,
@@ -180,7 +184,7 @@ void ToolbarIndicatorUITest::_testEmergencyStopReplacesDisarmInFlight()
                 // MockLink arms and climbs above home on takeoff
                 vehicle->sendMavCommand(vehicle->defaultComponentId(), MAV_CMD_NAV_TAKEOFF, false /* showError */, 0.0f,
                                         0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 10.0f /* altitude */);
-                QVERIFY_TRUE_WAIT(vehicle->flying(), TestTimeout::longMs());
+                QVERIFY_TRUE_WAIT(vehicle->underway(), TestTimeout::longMs());
             } else {
                 vehicle->setArmed(true, false /* showError */);
             }
@@ -204,13 +208,49 @@ void ToolbarIndicatorUITest::_testEmergencyStopReplacesDisarmInFlight()
                 return;
             }
 
-            // Held until activated: emergency stop disarms the vehicle in the air
-            const QPoint center =
-                shownButton->mapToScene(QPointF(shownButton->width() / 2, shownButton->height() / 2)).toPoint();
-            QTest::mousePress(_window, Qt::LeftButton, Qt::NoModifier, center);
+            // Emergency stop must go through the guided action confirmation, not act directly
+            QVERIFY(_clickItemAt(shownButton, 0.5, 0.5, emergencyStopName));
+            QQuickItem* const confirmButton =
+                findVisibleItem(_rootItem, QStringLiteral("guidedActionConfirmButton"), TestTimeout::mediumMs());
+            QVERIFY2(confirmButton, "Emergency stop guided action confirmation not shown");
+            QCOMPARE(confirmButton->property("text").toString(), QStringLiteral("EMERGENCY STOP"));
+            QVERIFY(vehicle->armed());
+
+            QVERIFY(QMetaObject::invokeMethod(confirmButton, "activated"));
             QVERIFY_TRUE_WAIT(!vehicle->armed(), TestTimeout::mediumMs());
-            QTest::mouseRelease(_window, Qt::LeftButton, Qt::NoModifier, center);
         });
+}
+
+void ToolbarIndicatorUITest::_testArmRequiresEnforcedChecklist()
+{
+    AppSettings* const appSettings = SettingsManager::instance()->appSettings();
+    Fact* const useChecklist = appSettings->useChecklist();
+    Fact* const enforceChecklist = appSettings->enforceChecklist();
+    const QVariant savedUseChecklist = useChecklist->rawValue();
+    const QVariant savedEnforceChecklist = enforceChecklist->rawValue();
+    const auto guard = qScopeGuard([=] {
+        useChecklist->setRawValue(savedUseChecklist);
+        enforceChecklist->setRawValue(savedEnforceChecklist);
+    });
+    useChecklist->setRawValue(true);
+    enforceChecklist->setRawValue(true);
+
+    runWithMockLink([] { return MockLink::startPX4MockLink(); },
+                    [this](QPointer<MockLink> /*mockLink*/, Vehicle* vehicle) {
+                        QQuickItem* const indicator = findVisibleItem(
+                            _rootItem, QStringLiteral("toolbar_mainStatusIndicator"), TestTimeout::mediumMs());
+                        QVERIFY2(indicator, "Main status indicator not visible");
+                        QVERIFY(_clickItemAt(indicator, 0.5, 0.5, QStringLiteral("toolbar_mainStatusIndicator")));
+
+                        QQuickItem* const armButton =
+                            findVisibleItem(_rootItem, QStringLiteral("mainStatusArmButton"), TestTimeout::mediumMs());
+                        QVERIFY2(armButton, "Arm button not shown in the main status drawer");
+                        QCOMPARE(armButton->property("text").toString(), QStringLiteral("Arm"));
+                        QVERIFY2(!armButton->isEnabled(), "Arm enabled before the enforced checklist passed");
+
+                        vehicle->setCheckListState(Vehicle::CheckListPassed);
+                        QTRY_VERIFY_WITH_TIMEOUT(armButton->isEnabled(), TestTimeout::mediumMs());
+                    });
 }
 
 void ToolbarIndicatorUITest::_testIndicatorDrawerClosesOnVehicleDisconnect()
