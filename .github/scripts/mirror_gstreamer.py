@@ -59,11 +59,7 @@ def artifacts_for(platform: str, version: str) -> list[Artifact]:
             )
         ]
     if platform == "ios":
-        return [
-            Artifact(
-                f"{PKG_BASE}/ios/{version}/gstreamer-1.0-devel-{version}-ios-universal.pkg", "ios"
-            )
-        ]
+        return [Artifact(f"{PKG_BASE}/ios/{version}/gstreamer-{version}-xcframework.tar.xz", "ios")]
     if platform == "macos":
         return [
             Artifact(f"{PKG_BASE}/macos/{version}/gstreamer-1.0-{version}-universal.pkg", "macos"),

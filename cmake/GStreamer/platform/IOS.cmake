@@ -1,10 +1,10 @@
 # iOS GStreamer SDK discovery — invoked by Orchestrator.cmake.
-# GStreamer 1.28 for iOS ships a universal GStreamer.framework (cerbero
-# versioned bundle) whose Versions/1.0/GStreamer binary is a single merged
-# static archive containing every library and plugin. Older/future SDKs may
-# ship a GStreamer.xcframework with a fat libGStreamer.a per slice. Both reduce
-# to the same single-merged-archive consumption model
-# (_qgc_create_xcframework_targets) — discovery just locates the binary + Headers.
+# The auto-downloaded SDK is the official GStreamer.xcframework: a fat
+# libGStreamer.a (every library and plugin merged) per slice, including an arm64
+# simulator slice. A local GStreamer.framework (the deprecated legacy layout) is
+# still accepted from a system install. Both reduce to the same
+# single-merged-archive consumption model (_qgc_create_xcframework_targets) —
+# discovery just locates the binary + Headers.
 
 include_guard(GLOBAL)
 
@@ -39,10 +39,10 @@ macro(_qgc_discover_ios_sdk)
     if(NOT _gst_ios_bundle)
         gstreamer_resolve_or_download_sdk(
             PLATFORM         ios
-            CACHE_SUBDIR     "gstreamer-ios-${GStreamer_FIND_VERSION}"
-            FILENAME_PRIMARY "gstreamer-ios.pkg"
+            CACHE_SUBDIR     "gstreamer-ios-xcframework-${GStreamer_FIND_VERSION}"
+            FILENAME_PRIMARY "gstreamer-ios-xcframework.tar.xz"
             CACHE_DIR_OUT    _gst_ios_cache_dir
-            ARCHIVE_OUT      _gst_ios_pkg
+            ARCHIVE_OUT      _gst_ios_archive
         )
         set(_gst_ios_expanded "${_gst_ios_cache_dir}/expanded")
 
@@ -71,10 +71,18 @@ macro(_qgc_discover_ios_sdk)
         endif()
 
         if(NOT EXISTS "${_gst_ios_expanded}")
-            _qgc_pkgutil_expand_and_validate("${_gst_ios_pkg}" "${_gst_ios_expanded}" "iOS")
+            # Extract to a sibling directory and rename so an interrupted extraction
+            # is never mistaken for a complete one. tvOS slices are not used.
+            file(REMOVE_RECURSE "${_gst_ios_expanded}.tmp")
+            file(ARCHIVE_EXTRACT
+                INPUT "${_gst_ios_archive}"
+                DESTINATION "${_gst_ios_expanded}.tmp"
+                PATTERNS "GStreamer.xcframework/Info.plist" "GStreamer.xcframework/ios-*"
+            )
+            file(RENAME "${_gst_ios_expanded}.tmp" "${_gst_ios_expanded}")
         endif()
 
-        # Prefer xcframework when present (future SDKs); fall back to framework.
+        # Prefer the xcframework; fall back to a legacy framework.
         file(GLOB_RECURSE _xcfw_info_plists LIST_DIRECTORIES false
             "${_gst_ios_expanded}/*/GStreamer.xcframework/Info.plist"
             "${_gst_ios_expanded}/GStreamer.xcframework/Info.plist"
@@ -105,7 +113,7 @@ macro(_qgc_discover_ios_sdk)
             string(REPLACE ";" "\n  " _all_fw_str "${_all_fw}")
             message(FATAL_ERROR
                 "Could not locate GStreamer.xcframework or GStreamer.framework in expanded iOS SDK at"
-                " '${_gst_ios_expanded}'. The .pkg layout may have changed.\n"
+                " '${_gst_ios_expanded}'. The XCFramework archive layout may have changed.\n"
                 "Top-level entries:\n  ${_top_entries_str}\n"
                 "All *.xcframework directories:\n  ${_all_xcfw_str}\n"
                 "All *.framework directories:\n  ${_all_fw_str}")

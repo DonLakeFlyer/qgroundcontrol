@@ -12,7 +12,7 @@ function(gstreamer_get_package_url PLATFORM VERSION OUTPUT_VAR)
 
     # URL templates for simple platforms — VERSION substituted via _base.
     set(_url_android       "${_base}/data/pkg/android/${VERSION}/gstreamer-1.0-android-universal-${VERSION}.tar.xz")
-    set(_url_ios           "${_base}/data/pkg/ios/${VERSION}/gstreamer-1.0-devel-${VERSION}-ios-universal.pkg")
+    set(_url_ios           "${_base}/data/pkg/ios/${VERSION}/gstreamer-${VERSION}-xcframework.tar.xz")
     set(_url_macos         "${_base}/data/pkg/macos/${VERSION}/gstreamer-1.0-${VERSION}-universal.pkg")
     set(_url_macos_devel   "${_base}/data/pkg/macos/${VERSION}/gstreamer-1.0-devel-${VERSION}-universal.pkg")
 

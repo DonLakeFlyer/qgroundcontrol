@@ -10,7 +10,7 @@ gstreamer_get_package_url(android  1.28.2 _u_android)
 qgc_test_assert_streq("android url" "https://gstreamer.freedesktop.org/data/pkg/android/1.28.2/gstreamer-1.0-android-universal-1.28.2.tar.xz" "${_u_android}")
 
 gstreamer_get_package_url(ios      1.28.2 _u_ios)
-qgc_test_assert_streq("ios url" "https://gstreamer.freedesktop.org/data/pkg/ios/1.28.2/gstreamer-1.0-devel-1.28.2-ios-universal.pkg" "${_u_ios}")
+qgc_test_assert_streq("ios url" "https://gstreamer.freedesktop.org/data/pkg/ios/1.28.2/gstreamer-1.28.2-xcframework.tar.xz" "${_u_ios}")
 
 gstreamer_get_package_url(macos    1.28.2 _u_mac)
 qgc_test_assert_streq("macos url" "https://gstreamer.freedesktop.org/data/pkg/macos/1.28.2/gstreamer-1.0-1.28.2-universal.pkg" "${_u_mac}")
@@ -28,6 +28,9 @@ qgc_test_pass("get_package_url known platforms")
 
 gstreamer_get_s3_mirror_url(android 1.28.2 _s3_android)
 qgc_test_assert_streq("s3 android" "https://qgroundcontrol.s3.us-west-2.amazonaws.com/dependencies/gstreamer/android/gstreamer-1.0-android-universal-1.28.2.tar.xz" "${_s3_android}")
+
+gstreamer_get_s3_mirror_url(ios 1.28.2 _s3_ios)
+qgc_test_assert_streq("s3 ios" "https://qgroundcontrol.s3.us-west-2.amazonaws.com/dependencies/gstreamer/ios/gstreamer-1.28.2-xcframework.tar.xz" "${_s3_ios}")
 
 gstreamer_get_s3_mirror_url(macos 1.28.2 _s3_mac)
 qgc_test_assert_streq("s3 macos" "https://qgroundcontrol.s3.us-west-2.amazonaws.com/dependencies/gstreamer/macos/gstreamer-1.0-1.28.2-universal.pkg" "${_s3_mac}")

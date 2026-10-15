@@ -38,9 +38,9 @@ def test_windows_rejects_pre_1_28() -> None:
         artifacts_for("windows", "1.26.5")
 
 
-def test_ios_devel_pkg() -> None:
+def test_ios_xcframework() -> None:
     (art,) = artifacts_for("ios", "1.28.3")
-    assert art.filename == "gstreamer-1.0-devel-1.28.3-ios-universal.pkg"
+    assert art.filename == "gstreamer-1.28.3-xcframework.tar.xz"
     assert art.url.startswith("https://gstreamer.freedesktop.org/data/pkg/ios/")
 
 
