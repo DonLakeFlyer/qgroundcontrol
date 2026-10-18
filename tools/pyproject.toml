@@ -38,6 +38,11 @@ coverage = [
   {include-group = "scripts"},
   "gcovr",
 ]
+terrain = [
+  "numpy>=2",
+  "pillow>=11",
+  "rasterio>=1.4",
+]
 dev = [
   {include-group = "test"},
   {include-group = "lint"},
